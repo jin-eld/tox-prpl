@@ -666,11 +666,21 @@ static int toxprpl_send_im(PurpleConnection *gc, const char *who,
     return 1;
 }
 
-static int toxprpl_tox_addfriend(const char *buddy_key)
+static int toxprpl_tox_addfriend(const char *buddy_key, gboolean sendrequest)
 {
     unsigned char *bin_key = toxprpl_tox_hex_string_to_id(buddy_key);
-    int ret = m_addfriend(bin_key, DEFAULT_REQUEST_MESSAGE,
+    int ret;
+
+    if (sendrequest == TRUE)
+    {
+        ret = m_addfriend(bin_key, DEFAULT_REQUEST_MESSAGE,
                                    strlen(DEFAULT_REQUEST_MESSAGE) + 1);
+    }
+    else
+    {
+        ret = m_addfriend_norequest(bin_key);
+    }
+
     g_free(bin_key);
     const char *msg;
     switch (ret)
@@ -717,7 +727,7 @@ static void toxprpl_add_to_buddylist(char *buddy_key)
         return;
     }
 
-    int ret = toxprpl_tox_addfriend(buddy_key);
+    int ret = toxprpl_tox_addfriend(buddy_key, FALSE);
     if (ret < 0)
     {
         g_free(buddy_key);
@@ -761,7 +771,7 @@ static void toxprpl_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
 
     PurpleAccount *account = purple_connection_get_account(gc);
 
-    int ret = toxprpl_tox_addfriend(buddy->name);
+    int ret = toxprpl_tox_addfriend(buddy->name, TRUE);
     if ((ret < 0) && (ret != FAERR_ALREADYSENT))
     {
         purple_blist_remove_buddy(buddy);
