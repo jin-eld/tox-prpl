@@ -680,23 +680,24 @@ static int toxprpl_tox_addfriend(const char *buddy_key)
     const char *msg;
     switch (ret)
     {
-        case -1:
+        case FAERR_TOOLONG:
             msg = "Message too long";
             break;
-        case -2:
+        case FAERR_NOMESSAGE:
             msg = "Missing request message";
             break;
-        case -3:
+        case FAERR_OWNKEY:
             msg = "You're trying to add yourself as a friend";
             break;
-        case -4:
+        case FAERR_ALREADYSENT:
             msg = "Friend request already sent";
             break;
-        case -5:
+        case FAERR_UNKNOWN:
             msg = "Error adding friend";
             break;
         default:
-            purple_debug_info("toxprpl", "Friend %s added\n", buddy_key);
+            purple_debug_info("toxprpl", "Friend %s added as %d\n", buddy_key,
+                              ret);
             break;
     }
 
@@ -765,19 +766,13 @@ static void toxprpl_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
 
     PurpleAccount *account = purple_connection_get_account(gc);
 
-    if (purple_find_buddy(account, buddy->name) != NULL) {
-//        purple_blist_remove_buddy(buddy);
-        return;
-    }
-
     int ret = toxprpl_tox_addfriend(buddy->name);
-    if (ret < 0)
+    if ((ret < 0) && (ret != FAERR_ALREADYSENT))
     {
         purple_blist_remove_buddy(buddy);
     }
-    toxprpl_buddy_data *buddy_data = g_new0(toxprpl_buddy_data, 1);
-    buddy_data->tox_friendlist_number = ret;
-    purple_buddy_set_protocol_data(buddy, buddy_data);
+    // buddy data will be added by the query_buddy_status function
+    toxprpl_query_buddy_status((gpointer)buddy, (gpointer)gc);
 }
 
 static void toxprpl_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
@@ -794,7 +789,8 @@ static void toxprpl_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
 
 static void toxprpl_free_buddy(PurpleBuddy *buddy)
 {
-    if (buddy->proto_data) {
+    if (buddy->proto_data)
+    {
         toxprpl_buddy_data *buddy_data = buddy->proto_data;
         g_free(buddy_data);
     }
