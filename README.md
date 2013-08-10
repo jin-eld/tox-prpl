@@ -3,7 +3,7 @@
 This is a [Tox](http://tox.im) plugin for [Pidgin](http://pidgin.im).
 
 The development is still in the very early stages and while some things work,
-the plugin is by far not complete and might be unstable.
+the plugin is not complete and might be unstable.
 
 ### Current status
 
@@ -11,9 +11,8 @@ As mentioned above, this is a very early stage of development so don't expect
 too much. It's also my very first libpurple protocol plugin and my first time
 with glib, so I'm sure I messed up a thing or two or even more. :>
 
-In my last test I had a conversation with three people and things seemed to
-work well.
-
+Here's a screenshot of a Tox chat in Pidgin:
+![Screenshot of a Tox chat in Pidgin](http://www.deadlock.dhs.org/jin/tox/tox-pidgin.png "Screenshot of a Tox chat in Pidgin")
 
 Below is a list of things that are implemented (which does not mean they are not
 buggy and won't crash and burn):
@@ -123,6 +122,7 @@ Clone the repo if you did not do so already:
 
 ```bash
 git clone https://github.com/jin-eld/tox-prpl.git
+cd tox-prpl
 ```
 
 Generate the configure script:
