@@ -99,11 +99,11 @@ typedef struct
     int tox_friendlist_number;
 } toxprpl_buddy_data;
 
-#define TOXPRPL_MAX_STATUSES    4
-#define TOXPRPL_STATUS_ONLINE     0
-#define TOXPRPL_STATUS_AWAY       1
-#define TOXPRPL_STATUS_BUSY       2
-#define TOXPRPL_STATUS_OFFLINE    3
+#define TOXPRPL_MAX_STATUS        4
+#define TOXPRPL_STATUS_ONLINE       0
+#define TOXPRPL_STATUS_AWAY         1
+#define TOXPRPL_STATUS_BUSY         2
+#define TOXPRPL_STATUS_OFFLINE      3
 
 static toxprpl_status toxprpl_statuses[] =
 {
@@ -170,6 +170,19 @@ static int toxprpl_get_status_index(int fnum, USERSTATUS status)
             }
     }
     return TOXPRPL_STATUS_OFFLINE;
+}
+
+static USERSTATUS toxprpl_get_tox_status_from_id(const char *status_id)
+{
+    int i;
+    for (i = 0; i < TOXPRPL_MAX_STATUS; i++)
+    {
+        if (strcmp(toxprpl_statuses[i].id, status_id) == 0)
+        {
+            return toxprpl_statuses[i].tox_status;
+        }
+    }
+    return USERSTATUS_INVALID;
 }
 
 /* tox helpers */
@@ -473,6 +486,27 @@ static void discover_status(PurpleConnection *from, PurpleConnection *to,
     }
 }
 
+static void toxprpl_set_status(PurpleAccount *account, PurpleStatus *status)
+{
+    const char* status_id = purple_status_get_id(status);
+    const char *message = purple_status_get_attr_string(status, "message");
+
+    purple_debug_info("toxprpl", "setting status %s\n", status_id);
+
+    USERSTATUS tox_status = toxprpl_get_tox_status_from_id(status_id);
+    if (tox_status == USERSTATUS_INVALID)
+    {
+        purple_debug_info("toxprpl", "status %s is invalid\n", status_id);
+        return;
+    }
+
+    m_set_userstatus(tox_status);
+    if ((message != NULL) && (strlen(message) > 0))
+    {
+        m_set_statusmessage((uint8_t *)message, strlen(message) + 1);
+    }
+    // FOKEL
+}
 // query buddy status
 static void toxprpl_query_buddy_info(gpointer data, gpointer user_data)
 {
@@ -554,7 +588,7 @@ static GList *toxprpl_status_types(PurpleAccount *acct)
 
     purple_debug_info("toxprpl", "setting up status types\n");
 
-    for (i = 0; i < TOXPRPL_MAX_STATUSES; i++)
+    for (i = 0; i < TOXPRPL_MAX_STATUS; i++)
     {
         type = purple_status_type_new_with_attrs(toxprpl_statuses[i].primitive,
             toxprpl_statuses[i].id, toxprpl_statuses[i].title, TRUE, TRUE,
@@ -870,7 +904,7 @@ static PurplePluginProtocolInfo prpl_info =
     NULL,                                      /* set_info */
     NULL,                                      /* send_typing */
     NULL,                                      /* get_info */
-    NULL,                                      /* set_status */
+    toxprpl_set_status,                 /* set_status */
     NULL,                                      /* set_idle */
     NULL,                                      /* change_passwd */
     NULL,                                      /* add_buddy */
