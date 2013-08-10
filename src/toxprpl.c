@@ -246,8 +246,9 @@ static void on_request(uint8_t* public_key, uint8_t* data, uint16_t length)
         return;
     }
 
-    dialog_message = g_strdup_printf("The user %s sendy you a friend request, "
-                                    "do you want to add him?", buddy_key);
+    dialog_message = g_strdup_printf("The user %s has sent you a friend "
+                                    "request, do you want to add him?",
+                                    buddy_key);
 
     gchar *request_msg = NULL;
     if (length > 0)
