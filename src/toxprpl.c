@@ -603,6 +603,24 @@ static void toxprpl_login(PurpleAccount *acct)
 
     purple_debug_info("toxprpl", "logging in %s\n", acct->username);
 
+    const char *msg64 = purple_account_get_string(acct, "messenger", NULL);
+    if (msg64 != NULL)
+    {
+        purple_debug_info("toxprpl", "found preference data\n");
+        gsize out_len;
+        guchar *msg_data = g_base64_decode(msg64, &out_len);
+        if (msg_data && (out_len > 0))
+        {
+            Messenger_load((uint8_t *)msg_data, (uint32_t)out_len);
+            g_free(msg_data);
+        }
+    }
+    else
+    {
+        purple_debug_info("toxprpl", "preferences not found\n");
+        //purple_account_add_string("/plugins/prpl/tox/messenger", "");
+    }
+
     purple_connection_update_progress(gc, _("Connecting"),
             0,   /* which connection step this is */
             2);  /* total number of steps */
@@ -622,7 +640,8 @@ static void toxprpl_login(PurpleAccount *acct)
     purple_debug_info("toxprpl", "Will connect to %s:%d (%s)\n" ,
                       ip, DEFAULT_SERVER_PORT, key);
     g_tox_messenger_timer = purple_timeout_add(100, tox_messenger_loop, NULL);
-    purple_debug_info("toxprpl", "added messenger timer as %d\n", g_tox_messenger_timer);
+    purple_debug_info("toxprpl", "added messenger timer as %d\n",
+                      g_tox_messenger_timer);
     g_tox_connection_timer = purple_timeout_add_seconds(2, tox_connection_check,
                                                         gc);
 }
@@ -632,6 +651,16 @@ static void toxprpl_close(PurpleConnection *gc)
     /* notify other toxprpl accounts */
     purple_debug_info("toxprpl", "Closing!\n");
     foreach_toxprpl_gc(report_status_change, gc, NULL);
+
+    PurpleAccount *account = purple_connection_get_account(gc);
+    uint32_t msg_size = Messenger_size();
+    guchar *msg_data = g_malloc0(msg_size);
+    Messenger_save((uint8_t *)msg_data);
+
+    gchar *msg64 = g_base64_encode(msg_data, msg_size);
+    purple_account_set_string(account, "messenger", msg64);
+    g_free(msg64);
+    g_free(msg_data);
 }
 
 static int toxprpl_send_im(PurpleConnection *gc, const char *who,
@@ -926,28 +955,6 @@ static void toxprpl_init(PurplePlugin *plugin)
         "dht_server_key", DEFAULT_SERVER_KEY);
     prpl_info.protocol_options = g_list_append(prpl_info.protocol_options,
                                                option);
-    purple_prefs_add_none("/plugins");
-    purple_prefs_add_none("/plugins/prpl");
-    purple_prefs_add_none("/plugins/prpl/tox");
-    const char *msg64 = purple_prefs_get_string("/plugins/prpl/tox/messenger");
-    if (msg64 != NULL)
-    {
-        purple_debug_info("toxprpl", "found preference data\n");
-        gsize out_len;
-        guchar *msg_data = g_base64_decode(msg64, &out_len);
-        if (msg_data && (out_len > 0))
-        {
-            Messenger_load((uint8_t *)msg_data, (uint32_t)out_len);
-            g_free(msg_data);
-        }
-    }
-    else
-    {
-        purple_debug_info("toxprpl", "preferences not found, adding\n", msg64);
-        purple_prefs_add_string("/plugins/prpl/tox/messenger", "");
-    }
-
-
     g_tox_protocol = plugin;
     purple_debug_info("toxprpl", "initialization complete\n");
 }
@@ -962,14 +969,6 @@ static void toxprpl_destroy(PurplePlugin *plugin)
     purple_timeout_remove(g_tox_messenger_timer);
     purple_timeout_remove(g_tox_connection_timer);
 
-    uint32_t msg_size = Messenger_size();
-    guchar *msg_data = g_malloc0(msg_size);
-    Messenger_save((uint8_t *)msg_data);
-
-    gchar *msg64 = g_base64_encode(msg_data, msg_size);
-    purple_prefs_set_string("/plugins/prpl/tox/messenger", msg64);
-    g_free(msg64);
-    g_free(msg_data);
     g_logged_in = 0;
 }
 
