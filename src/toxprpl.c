@@ -551,31 +551,6 @@ static void report_status_change(PurpleConnection *from, PurpleConnection *to,
     discover_status(to, from, NULL);
 }
 
-
-/*
- * UI callbacks
- */
-static void toxprpl_input_user_info(PurplePluginAction *action)
-{
-    PurpleConnection *gc = (PurpleConnection *)action->context;
-    PurpleAccount *acct = purple_connection_get_account(gc);
-    purple_debug_info("toxprpl", "showing 'Set User Info' dialog for %s\n",
-            acct->username);
-
-    purple_account_request_change_user_info(acct);
-}
-
-/* this is set to the actions member of the PurplePluginInfo struct at the
- * bottom.
- */
-static GList *toxprpl_actions(PurplePlugin *plugin, gpointer context)
-{
-    PurplePluginAction *action = purple_plugin_action_new(
-            _("Set User Info..."), toxprpl_input_user_info);
-    return g_list_append(NULL, action);
-}
-
-
 static const char *toxprpl_list_icon(PurpleAccount *acct, PurpleBuddy *buddy)
 {
     return "tox";
@@ -1031,7 +1006,7 @@ static PurplePluginInfo info =
     NULL,                                               /* ui_info */
     &prpl_info,                                         /* extra_info */
     NULL,                                               /* prefs_info */
-    toxprpl_actions,                                    /* actions */
+    NULL,                                               /* actions */
     NULL,                                               /* padding... */
     NULL,
     NULL,
