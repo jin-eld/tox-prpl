@@ -183,7 +183,7 @@ static gchar *toxprpl_tox_bin_id_to_string(uint8_t *bin_id)
         sprintf(p, "%02x", bin_id[i] & 0xff);
         p = p + 2;
     }
-    p[CLIENT_ID_SIZE * 2] = '\0';
+    string_id[CLIENT_ID_SIZE * 2] = '\0';
     return string_id;
 }
 
@@ -221,13 +221,6 @@ static void on_request(uint8_t* public_key, uint8_t* data, uint16_t length)
     }
 
     gchar *buddy_key = toxprpl_tox_bin_id_to_string(public_key);
-    if (buddy_key == NULL)
-    {
-        purple_notify_error(g_tox_gc, _("Error"),
-                            _("Could not parse public key of a buddy request "),
-                            NULL);
-        return;
-    }
     purple_debug_info("toxprpl", "Buddy request from %s: %s\n",
                       buddy_key, data);
 
@@ -254,7 +247,7 @@ static void on_request(uint8_t* public_key, uint8_t* data, uint16_t length)
                           PURPLE_DEFAULT_ACTION_NONE,
                           purple_connection_get_account(g_tox_gc), NULL,
                           NULL,
-                          buddy_key, // data, will be freed elsewhere
+                          buddy_key, // buddy key will be freed elsewhere
                           G_CALLBACK(toxprpl_add_to_buddylist),
                           G_CALLBACK(toxprpl_do_not_add_to_buddylist));
     g_free(dialog_message);
@@ -481,19 +474,20 @@ static void discover_status(PurpleConnection *from, PurpleConnection *to,
 }
 
 // query buddy status
-static void toxprpl_query_buddy_status(gpointer data, gpointer user_data)
+static void toxprpl_query_buddy_info(gpointer data, gpointer user_data)
 {
-    purple_debug_info("toxprpl", "toxprpl_query_buddy_status\n");
+    purple_debug_info("toxprpl", "toxprpl_query_buddy_info\n");
     PurpleBuddy *buddy = (PurpleBuddy *)data;
     PurpleConnection *gc = (PurpleConnection *)user_data;
-    unsigned char *bin_key = toxprpl_tox_hex_string_to_id(buddy->name);
     toxprpl_buddy_data *buddy_data = purple_buddy_get_protocol_data(buddy);
     if (buddy_data == NULL)
     {
+        unsigned char *bin_key = toxprpl_tox_hex_string_to_id(buddy->name);
         int fnum = getfriend_id(bin_key);
         buddy_data = g_new0(toxprpl_buddy_data, 1);
         buddy_data->tox_friendlist_number = fnum;
         purple_buddy_set_protocol_data(buddy, buddy_data);
+        g_free(bin_key);
     }
 
     PurpleAccount *account = purple_connection_get_account(gc);
@@ -572,13 +566,14 @@ static unsigned char *toxprpl_tox_hex_string_to_id(const char *hex_string)
 {
     int i;
     size_t len = strlen(hex_string);
-    unsigned char *bin = malloc(len);
-    if (bin == NULL)
+    if (len != 64)
     {
+        purple_debug_info("toxprpl", "invalid string key %s\n", hex_string);
         return NULL;
     }
+    unsigned char *bin = g_malloc(len);
     const char *p = hex_string;
-    for (i = 0; i < len; i++)
+    for (i = 0; i < len / 2; i++)
     {
         sscanf(p, "%2hhx", &bin[i]);
         p = p + 2;
@@ -618,7 +613,7 @@ static void toxprpl_login(PurpleAccount *acct)
     dht.ip.i = resolved;
     unsigned char *bin_str = toxprpl_tox_hex_string_to_id(key);
     DHT_bootstrap(dht, bin_str);
-    free(bin_str);
+    g_free(bin_str);
     purple_debug_info("toxprpl", "Will connect to %s:%d (%s)\n" ,
                       ip, DEFAULT_SERVER_PORT, key);
     g_tox_messenger_timer = purple_timeout_add(100, tox_messenger_loop, NULL);
@@ -669,14 +664,9 @@ static int toxprpl_send_im(PurpleConnection *gc, const char *who,
 static int toxprpl_tox_addfriend(const char *buddy_key)
 {
     unsigned char *bin_key = toxprpl_tox_hex_string_to_id(buddy_key);
-    if (!bin_key)
-    {
-        purple_debug_info("toxprpl", "Can not allocate memory for key\n");
-        return -1;
-    }
     int ret = m_addfriend(bin_key, DEFAULT_REQUEST_MESSAGE,
                                    strlen(DEFAULT_REQUEST_MESSAGE) + 1);
-    free(bin_key);
+    g_free(bin_key);
     const char *msg;
     switch (ret)
     {
