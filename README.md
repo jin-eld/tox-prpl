@@ -3,14 +3,17 @@
 This is a [Tox](http://tox.im) plugin for [Pidgin](http://pidgin.im).
 
 The development is still in the very early stages and while some things work,
-the plugin is not yet stable and will crash Pidgin at some point.
+the plugin is by far not complete and might be unstable.
 
 ### Current status
 
 As mentioned above, this is a very early stage of development so don't expect
 too much. It's also my very first libpurple protocol plugin and my first time
-with glib, so I'm sure I messed up a thing or two or even more. Well, I 
-certainly have, because right now it crashes after about 10 messages ;)
+with glib, so I'm sure I messed up a thing or two or even more. :>
+
+In my last test I had a conversation with three people and things seemed to
+work well.
+
 
 Below is a list of things that are implemented (which does not mean they are not
 buggy and won't crash and burn):
