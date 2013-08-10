@@ -543,7 +543,7 @@ static GList *toxprpl_actions(PurplePlugin *plugin, gpointer context)
 
 static const char *toxprpl_list_icon(PurpleAccount *acct, PurpleBuddy *buddy)
 {
-    return "null";
+    return "tox";
 }
 
 static GList *toxprpl_status_types(PurpleAccount *acct)

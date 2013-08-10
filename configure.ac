@@ -125,5 +125,6 @@ PKG_CHECK_MODULES(PURPLE, [purple >= 2.7.0])
 PKG_CHECK_MODULES(GLIB, [glib-2.0])
 AC_CONFIG_FILES([Makefile
                  build/Makefile
+                 pixmaps/Makefile
                 ])
 AC_OUTPUT
