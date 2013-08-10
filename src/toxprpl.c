@@ -145,7 +145,7 @@ static void foreach_toxprpl_gc(GcFunc fn, PurpleConnection *from,
                                gpointer userdata);
 static void discover_status(PurpleConnection *from, PurpleConnection *to,
         gpointer userdata);
-static void toxprpl_query_buddy_status(gpointer data, gpointer user_data);
+static void toxprpl_query_buddy_info(gpointer data, gpointer user_data);
 
 static unsigned char *toxprpl_tox_hex_string_to_id(const char *hex_string);
 
@@ -359,7 +359,7 @@ static gboolean tox_connection_check(gpointer gc)
         // query status of all buddies
         PurpleAccount *account = purple_connection_get_account(gc);
         GSList *buddy_list = purple_find_buddies(account, NULL);
-        g_slist_foreach(buddy_list, toxprpl_query_buddy_status, gc);
+        g_slist_foreach(buddy_list, toxprpl_query_buddy_info, gc);
         g_slist_free(buddy_list);
     }
     else if ((g_connected == 1) && !DHT_isconnected())
@@ -500,7 +500,12 @@ static void toxprpl_query_buddy_info(gpointer data, gpointer user_data)
             buddy_data->tox_friendlist_number,
             m_get_userstatus(buddy_data->tox_friendlist_number))].id,
         NULL);
-    g_free(bin_key);
+
+    uint8_t alias[MAX_NAME_LENGTH];
+    if (getname(buddy_data->tox_friendlist_number, alias) == 0)
+    {
+        purple_blist_alias_buddy(buddy, alias);
+    }
 }
 
 static void report_status_change(PurpleConnection *from, PurpleConnection *to,
@@ -761,8 +766,8 @@ static void toxprpl_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
     {
         purple_blist_remove_buddy(buddy);
     }
-    // buddy data will be added by the query_buddy_status function
-    toxprpl_query_buddy_status((gpointer)buddy, (gpointer)gc);
+    // buddy data will be added by the query_buddy_info function
+    toxprpl_query_buddy_info((gpointer)buddy, (gpointer)gc);
 }
 
 static void toxprpl_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
