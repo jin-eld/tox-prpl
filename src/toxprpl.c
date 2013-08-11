@@ -376,6 +376,35 @@ static gboolean tox_connection_check(gpointer gc)
         GSList *buddy_list = purple_find_buddies(account, NULL);
         g_slist_foreach(buddy_list, toxprpl_query_buddy_info, gc);
         g_slist_free(buddy_list);
+
+        purple_account_set_username(account, id);
+
+        uint8_t our_name[MAX_NAME_LENGTH];
+        uint16_t name_len = getself_name(our_name);
+        // bug in the library?
+        if (name_len == 0)
+        {
+            our_name[0] = '\0';
+        }
+
+        const char *nick = purple_account_get_string(account, "nickname", NULL);
+        if (nick == NULL)
+        {
+            if (strlen(our_name) > 0)
+            {
+                purple_connection_set_display_name(gc, (const char *)our_name);
+                purple_account_set_string(account, "nickname",
+                                                      (const char *)our_name);
+            }
+        }
+        else
+        {
+            purple_connection_set_display_name(gc, nick);
+            if (strcmp(nick, our_name) != 0)
+            {
+                setname((uint8_t *)nick, strlen(nick) + 1);
+            }
+        }
     }
     else if ((g_connected == 1) && !DHT_isconnected())
     {
@@ -832,6 +861,57 @@ static void toxprpl_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
     }
 }
 
+static void toxprpl_set_nick_action(PurpleConnection *gc,
+                                    PurpleRequestFields *fields)
+{
+    PurpleAccount *account = purple_connection_get_account(gc);
+    const char *nickname = purple_request_fields_get_string(fields,
+                                                            "text_nickname");
+    if (nickname != NULL)
+    {
+        purple_connection_set_display_name(gc, nickname);
+        setname((uint8_t *)nickname, strlen(nickname) + 1);
+        purple_account_set_string(account, "nickname", nickname);
+    }
+}
+
+static void toxprpl_action_set_nick_dialog(PurplePluginAction *action)
+{
+    PurpleConnection *gc = (PurpleConnection*)action->context;
+    PurpleAccount *account = purple_connection_get_account(gc);
+
+    PurpleRequestFields *fields;
+    PurpleRequestFieldGroup *group;
+    PurpleRequestField *field;
+
+    fields = purple_request_fields_new();
+    group = purple_request_field_group_new(NULL);
+    purple_request_fields_add_group(fields, group);
+
+    field = purple_request_field_string_new("text_nickname",
+                    _("Nickname"),
+                    purple_account_get_string(account, "nickname", ""), FALSE);
+
+    purple_request_field_group_add_field(group, field);
+    purple_request_fields(gc, _("Set your nickname"), NULL, NULL, fields,
+            _("_Set"), G_CALLBACK(toxprpl_set_nick_action),
+            _("_Cancel"), NULL,
+            account, account->username, NULL, gc);
+}
+
+static GList *toxprpl_account_actions(PurplePlugin *plugin, gpointer context)
+{
+    purple_debug_info("toxprpl", "setting up account actions\n");
+
+    GList *actions = NULL;
+    PurplePluginAction *action;
+
+    action = purple_plugin_action_new(_("Set nickname..."),
+             toxprpl_action_set_nick_dialog);
+    actions = g_list_append(actions, action);
+    return actions;
+}
+
 static void toxprpl_free_buddy(PurpleBuddy *buddy)
 {
     if (buddy->proto_data)
@@ -839,12 +919,6 @@ static void toxprpl_free_buddy(PurpleBuddy *buddy)
         toxprpl_buddy_data *buddy_data = buddy->proto_data;
         g_free(buddy_data);
     }
-}
-
-static gboolean toxprpl_can_receive_file(PurpleConnection *gc,
-        const char *who)
-{
-    return FALSE;
 }
 
 static gboolean toxprpl_offline_message(const PurpleBuddy *buddy)
@@ -858,15 +932,7 @@ static PurplePluginProtocolInfo prpl_info =
     OPT_PROTO_NO_PASSWORD | OPT_PROTO_REGISTER_NOSCREENNAME,  /* options */
     NULL,               /* user_splits, initialized in toxprpl_init() */
     NULL,               /* protocol_options, initialized in toxprpl_init() */
-    {   /* icon_spec, a PurpleBuddyIconSpec */
-        "png,jpg,gif",                   /* format */
-        0,                               /* min_width */
-        0,                               /* min_height */
-        128,                             /* max_width */
-        128,                             /* max_height */
-        10000,                           /* max_filesize */
-        PURPLE_ICON_SCALE_DISPLAY,       /* scale_rules */
-    },
+    NO_BUDDY_ICONS,
     toxprpl_list_icon,                   /* list_icon */
     NULL,                                      /* list_emblem */
     NULL,                                      /* status_text */
@@ -918,7 +984,7 @@ static PurplePluginProtocolInfo prpl_info =
     NULL,                                      /* roomlist_get_list */
     NULL,                                      /* roomlist_cancel */
     NULL,                                      /* roomlist_expand_category */
-    toxprpl_can_receive_file,            /* can_receive_file */
+    NULL,                                      /* can_receive_file */
     NULL,                                /* send_file */
     NULL,                                /* new_xfer */
     toxprpl_offline_message,             /* offline_message */
@@ -942,9 +1008,7 @@ static PurplePluginProtocolInfo prpl_info =
 static void toxprpl_init(PurplePlugin *plugin)
 {
     purple_debug_info("toxprpl", "starting up\n");
-
     initMessenger();
-    //m_callback_friendrequest(on_friend_request);
     m_callback_friendmessage(on_incoming_message);
     m_callback_namechange(on_nick_change);
     m_callback_userstatus(on_status_change);
@@ -954,8 +1018,13 @@ static void toxprpl_init(PurplePlugin *plugin)
     purple_debug_info("toxprpl", "initialized tox callbacks\n");
 
     PurpleAccountOption *option = purple_account_option_string_new(
-        _("Server"), "dht_server", DEFAULT_SERVER_IP);
+        _("Nickname"), "nickname", "");
     prpl_info.protocol_options = g_list_append(NULL, option);
+
+    option = purple_account_option_string_new(
+        _("Server"), "dht_server", DEFAULT_SERVER_IP);
+    prpl_info.protocol_options = g_list_append(prpl_info.protocol_options,
+                                               option);
 
     option = purple_account_option_int_new(_("Port"), "dht_server_port",
             DEFAULT_SERVER_PORT);
@@ -1007,7 +1076,7 @@ static PurplePluginInfo info =
     NULL,                                               /* ui_info */
     &prpl_info,                                         /* extra_info */
     NULL,                                               /* prefs_info */
-    NULL,                                               /* actions */
+    toxprpl_account_actions,                            /* actions */
     NULL,                                               /* padding... */
     NULL,
     NULL,
