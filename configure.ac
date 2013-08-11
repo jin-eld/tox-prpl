@@ -88,7 +88,7 @@ AC_SUBST(LIBTOXCORE_LIBS)
 AC_SUBST(LIBTOXCORE_LDFLAGS)
 
 # Checks for header files.
-AC_CHECK_HEADERS([string.h])
+AC_CHECK_HEADERS([arpa/inet.h string.h])
 
 LIBTOXCORE_CFLAGS=
 CFLAGS_SAVE="$CFLAGS"
@@ -117,6 +117,10 @@ CPPFLAGS="$CPPFLAGS_SAVE"
 AC_SUBST(LIBTOXCORE_CFLAGS)
 
 # Checks for typedefs, structures, and compiler characteristics.
+AC_TYPE_SIZE_T
+AC_TYPE_UINT8_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT32_T
 
 # Checks for library functions.
 
