@@ -50,6 +50,7 @@
 #include <status.h>
 #include <util.h>
 #include <version.h>
+#include <arpa/inet.h>
 
 #define _(msg) msg // might add gettext later
 
@@ -648,7 +649,7 @@ static void toxprpl_login(PurpleAccount *acct)
     DHT_bootstrap(dht, bin_str);
     g_free(bin_str);
     purple_debug_info("toxprpl", "Will connect to %s:%d (%s)\n" ,
-                      ip, DEFAULT_SERVER_PORT, key);
+                      ip, ntohs(dht.port), key);
     g_tox_messenger_timer = purple_timeout_add(100, tox_messenger_loop, NULL);
     purple_debug_info("toxprpl", "added messenger timer as %d\n",
                       g_tox_messenger_timer);
