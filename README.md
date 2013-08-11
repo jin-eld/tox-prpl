@@ -24,18 +24,19 @@ buggy and won't crash and burn):
 * showing remote buddy status changes
 * sending and receiving messages
 * storing/loading Tox messenger data
-* propagate your own status changes to the Tox network
-* propagate your own status messages to the Tox network 
+* handling status changes
+* setting status messages
+* setting your own nickname
 
 ## Limitations
 
 Right now you can only have one Tox account, trying to set up more will lead to
 desaster, because the Tox library does not support multiple instances.
+Also, if you disable and enable the account again - you will be in troubles,
+because the Tox library does not support shutdown and re-initilization.
 
 ## TODO
 * improve the code, integration of the Tox lib is not really ideal
-* tune account options dialog
-* allow setting nickname
 
 ### Compiling on Linux
 
