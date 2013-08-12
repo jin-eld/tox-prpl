@@ -148,4 +148,12 @@ mkdir ~/.purple/plugins/
 cp /home/youruser/Tox/sysroot/lib/purple-2/libtox.so ~/.purple/plugins/
 ```
 
+If you used a non standard installation location for the library, as above,
+then you have to add it to your environment before running pidgin.
+
+In the terminal where you start pidgin (assuming bash):
+```bash
+export LD_LIBRARY_PATH=/home/youruser/Tox/sysroot/lib
+```
+
 Now you are ready to start pidgin and to test the plugin.
