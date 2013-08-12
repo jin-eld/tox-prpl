@@ -624,6 +624,9 @@ static void toxprpl_login(PurpleAccount *acct)
     purple_debug_info("toxprpl", "initialized tox callbacks\n");
 
     PurpleConnection *gc = purple_account_get_connection(acct);
+    gc->flags |= PURPLE_CONNECTION_NO_FONTSIZE | PURPLE_CONNECTION_NO_URLDESC;
+    gc->flags |= PURPLE_CONNECTION_NO_IMAGES | PURPLE_CONNECTION_NO_NEWLINES;
+
     purple_connection_set_protocol_data(gc, m);
 
     g_tox_gc = gc;
@@ -720,8 +723,13 @@ static int toxprpl_send_im(PurpleConnection *gc, const char *who,
         return 0;
     }
     Messenger *m = purple_connection_get_protocol_data(gc);
-    m_sendmessage(m, buddy_data->tox_friendlist_number, (uint8_t *)message,
+    char *no_html = purple_markup_strip_html(message);
+    m_sendmessage(m, buddy_data->tox_friendlist_number, (uint8_t *)no_html,
                   strlen(message)+1);
+    if (no_html)
+    {
+        free(no_html);
+    }
     return 1;
 }
 
