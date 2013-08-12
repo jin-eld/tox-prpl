@@ -242,7 +242,8 @@ static void on_request(uint8_t* public_key, uint8_t* data, uint16_t length)
     PurpleBuddy *buddy = purple_find_buddy(account, buddy_key);
     if (buddy != NULL)
     {
-        purple_debug_info("toxprpl", "Buddy %s already in buddy list!\n");
+        purple_debug_info("toxprpl", "Buddy %s already in buddy list!\n",
+                          buddy_key);
         g_free(buddy_key);
         return;
     }
