@@ -703,8 +703,8 @@ static int toxprpl_send_im(PurpleConnection *gc, const char *who,
 {
     const char *from_username = gc->account->username;
 
-    purple_debug_info("toxprpl", "sending message from %s to %s: %s\n",
-            from_username, who, message);
+    purple_debug_info("toxprpl", "sending message from %s to %s\n",
+            from_username, who);
 
     PurpleAccount *account = purple_connection_get_account(gc);
     PurpleBuddy *buddy = purple_find_buddy(account, who);
