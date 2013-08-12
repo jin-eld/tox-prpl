@@ -18,8 +18,7 @@ libtox_la_CFLAGS = 	-I$(top_srcdir) \
 					$(PURPLE_CFLAGS) \
 					$(LIBTOXCORE_CFLAGS)
 
-libtox_la_LIBADD  = $(LIBTOXCORE_LDFLAGS) \
-					$(GLIB_LIBS) \
+libtox_la_LIBADD  =	$(GLIB_LIBS) \
 					$(PURPLE_LIBS) \
 					$(LIBTOXCORE_LIBS)
 

@@ -60,61 +60,8 @@ AC_CHECK_SIZEOF(time_t, [],[
 #include <stdio.h>
 #include <time.h>])
 
-LIBTOXCORE_LIBS=
-LIBTOXCORE_LDFLAGS=
-LDFLAGS_SAVE="$LDFLAGS"
-if test -n "$LIBTOXCORE_SEARCH_LIBS"; then
-    LDFLAGS="-L$LIBTOXCORE_SEARCH_LIBS"
-    AC_CHECK_LIB(toxcore, getclient_id,
-        [
-            LIBTOXCORE_LDFLAGS="-L$LIBTOXCORE_SEARCH_LIBS"
-            LIBTOXCORE_LIBS="-ltoxcore"
-        ],
-        [
-            AC_MSG_ERROR([required library libtoxcore was not found in requested location $LIBTOXCORE_SEARCH_LIBS])
-        ]
-    )
-else
-    AC_CHECK_LIB(toxcore, getclient_id,
-        [],
-        [
-            AC_MSG_ERROR([required library libtoxcore was not found on the system, please check http://tox.im/])
-        ]
-    )
-fi
-
-LDFLAGS="$LDFLAGS_SAVE"
-AC_SUBST(LIBTOXCORE_LIBS)
-AC_SUBST(LIBTOXCORE_LDFLAGS)
-
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h string.h])
-
-LIBTOXCORE_CFLAGS=
-CFLAGS_SAVE="$CFLAGS"
-CPPFLAGS_SAVE="$CPPFLAGS"
-if test -n "$LIBTOXCORE_SEARCH_HEADERS"; then
-    CFLAGS="-I$LIBTOXCORE_SEARCH_HEADERS"
-    CPPFLAGS="-I$LIBTOXCORE_SEARCH_HEADERS"
-    AC_CHECK_HEADER(tox/Messenger.h,
-        [
-            LIBTOXCORE_CFLAGS="-I$LIBTOXCORE_SEARCH_HEADERS"
-        ],
-        [
-            AC_MSG_ERROR([header files for required library libtoxcore was not found in requested location $LIBTOXCORE_SEARCH_HEADERS])
-        ]
-    )
-else
-    AC_CHECK_HEADER(tox/Messenger.h,
-        [],
-        [
-            AC_MSG_ERROR([header files for required library libtoxcore was not found on your systm])
-        ]
-    )
-fi
-CFLAGS="$CFLAGS_SAVE"
-CPPFLAGS="$CPPFLAGS_SAVE"
-AC_SUBST(LIBTOXCORE_CFLAGS)
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_SIZE_T
@@ -122,11 +69,16 @@ AC_TYPE_UINT8_T
 AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 
-# Checks for library functions.
+# pkg-config checks
+
+PKG_PROG_PKG_CONFIG
 
 PKG_CHECK_MODULES(PURPLE, [purple >= 2.7.0])
 
 PKG_CHECK_MODULES(GLIB, [glib-2.0])
+
+PKG_CHECK_MODULES(LIBTOXCORE, [libtoxcore])
+
 AC_CONFIG_FILES([Makefile
                  build/Makefile
                  pixmaps/Makefile
