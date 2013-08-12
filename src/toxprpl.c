@@ -666,7 +666,7 @@ static void toxprpl_login(PurpleAccount *acct)
             0,   /* which connection step this is */
             2);  /* total number of steps */
 
-    const char* ip = purple_account_get_string(acct, "dht_server_ip",
+    const char* ip = purple_account_get_string(acct, "dht_server",
                                                DEFAULT_SERVER_IP);
     dht.port = htons(
             purple_account_get_int(acct, "dht_server_port",
