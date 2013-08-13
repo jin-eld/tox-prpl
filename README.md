@@ -31,8 +31,8 @@ buggy and won't crash and burn):
 ## Limitations
 
 Right now you can only have one Tox account, trying to set up more will lead to
-desaster, because the Tox library does not support multiple instances.
-Also, if you disable and enable the account again - you will be in troubles,
+disaster because the Tox library does not support multiple instances.
+Also, if you disable and enable the account again - you will be in troubles
 because the Tox library does not support shutdown and re-initilization.
 
 ## TODO
