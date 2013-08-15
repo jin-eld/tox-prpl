@@ -768,12 +768,16 @@ static int toxprpl_tox_addfriend(Messenger *m, PurpleConnection *gc,
         case FAERR_ALREADYSENT:
             msg = "Friend request already sent";
             break;
+        case FAERR_BADCHECKSUM:
+            msg = "Can't add friend: bad checksum in ID";
+            break;
+        case FAERR_SETNEWNOSPAM:
+            msg = "Can't add friend: wrong nospam ID";
+            break;
         case FAERR_UNKNOWN:
             msg = "Error adding friend";
             break;
         default:
-            purple_debug_info("toxprpl", "Friend %s added as %d\n", buddy_key,
-                              ret);
             break;
     }
 
@@ -781,6 +785,11 @@ static int toxprpl_tox_addfriend(Messenger *m, PurpleConnection *gc,
     {
         purple_notify_error(gc, _("Error"), msg, NULL);
     }
+    else
+    {
+        purple_debug_info("toxprpl", "Friend %s added as %d\n", buddy_key, ret);
+    }
+
     return ret;
 }
 
@@ -844,6 +853,7 @@ static void toxprpl_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
     if ((ret < 0) && (ret != FAERR_ALREADYSENT))
     {
         purple_blist_remove_buddy(buddy);
+        return;
     }
 
     gchar *cut = g_ascii_strdown(buddy->name, CLIENT_ID_SIZE * 2 + 1);
