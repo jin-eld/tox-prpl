@@ -66,6 +66,8 @@ extern uint8_t self_public_key[crypto_box_PUBLICKEYBYTES];
 // todo: allow user to specify a contact request message
 #define DEFAULT_REQUEST_MESSAGE _("Please allow me to add you as a friend!")
 
+static const char *g_HEX_CHARS = "0123456789abcdef";
+
 static PurplePlugin *g_tox_protocol = NULL;
 // tox does not allow to pass user data to callbacks, it also does not allow
 // to run multiple instances of the library, so this whole thing is pretty
@@ -152,7 +154,69 @@ static void discover_status(PurpleConnection *from, PurpleConnection *to,
         gpointer userdata);
 static void toxprpl_query_buddy_info(gpointer data, gpointer user_data);
 
-static unsigned char *toxprpl_tox_hex_string_to_id(const char *hex_string);
+// utilitis
+
+// returned buffer must be freed by the caller
+static char *toxprpl_data_to_hex_string(const unsigned char *data,
+                                        const size_t len)
+{
+    unsigned char *chars;
+    unsigned char hi, lo;
+    size_t i;
+    char *buf = malloc((len * 2) + 1);
+    char *p = buf;
+    chars = (unsigned char *)data;
+    chars = (unsigned char *)data;
+    for (i = 0; i < len; i++)
+    {
+        unsigned char c = chars[i];
+        hi = c >> 4;
+        lo = c & 0xF;
+        *p = g_HEX_CHARS[hi];
+        p++;
+        *p = g_HEX_CHARS[lo];
+        p++;
+    }
+    buf[len*2] = '\0';
+    return buf;
+}
+
+unsigned char *toxprpl_hex_string_to_data(const char *s)
+{
+    size_t len = strlen(s);
+    unsigned char *buf = malloc(len / 2);
+    unsigned char *p = buf;
+
+    size_t i;
+    for (i = 0; i < len; i += 2)
+    {
+        const char *chi = strchr(g_HEX_CHARS, g_ascii_tolower(s[i]));
+        const char *clo = strchr(g_HEX_CHARS, g_ascii_tolower(s[i + 1]));
+        int hi, lo;
+        if (chi)
+        {
+            hi = chi - g_HEX_CHARS;
+        }
+        else
+        {
+            hi = 0;
+        }
+
+        if (clo)
+        {
+            lo = clo - g_HEX_CHARS;
+        }
+        else
+        {
+            lo = 0;
+        }
+
+        unsigned char ch = (unsigned char)(hi << 4 | lo);
+        *p = ch;
+        p++;
+    }
+    return buf;
+}
 
 // stay independent from the lib
 static int toxprpl_get_status_index(Messenger *m, int fnum, USERSTATUS status)
@@ -191,28 +255,14 @@ static USERSTATUS toxprpl_get_tox_status_from_id(const char *status_id)
 }
 
 /* tox helpers */
-static gchar *toxprpl_tox_bin_to_string(uint8_t *bin_id, size_t len)
-{
-    int i;
-    gchar *string_id = g_malloc(len * 2 + 1);
-    gchar *p = string_id;
-    for (i = 0; i < len; i++)
-    {
-        sprintf(p, "%02x", bin_id[i] & 0xff);
-        p = p + 2;
-    }
-    string_id[len * 2] = '\0';
-    return string_id;
-}
-
 static gchar *toxprpl_tox_bin_id_to_string(uint8_t *bin_id)
 {
-    return toxprpl_tox_bin_to_string(bin_id, CLIENT_ID_SIZE);
+    return toxprpl_data_to_hex_string(bin_id, CLIENT_ID_SIZE);
 }
 
 static gchar *toxprpl_tox_friend_id_to_string(uint8_t *bin_id)
 {
-    return toxprpl_tox_bin_to_string(bin_id, FRIEND_ADDRESS_SIZE);
+    return toxprpl_data_to_hex_string(bin_id, FRIEND_ADDRESS_SIZE);
 }
 
 /* tox specific stuff */
@@ -529,7 +579,7 @@ static void toxprpl_query_buddy_info(gpointer data, gpointer user_data)
     toxprpl_buddy_data *buddy_data = purple_buddy_get_protocol_data(buddy);
     if (buddy_data == NULL)
     {
-        unsigned char *bin_key = toxprpl_tox_hex_string_to_id(buddy->name);
+        unsigned char *bin_key = toxprpl_hex_string_to_data(buddy->name);
         int fnum = getfriend_id(m, bin_key);
         buddy_data = g_new0(toxprpl_buddy_data, 1);
         buddy_data->tox_friendlist_number = fnum;
@@ -587,20 +637,6 @@ static GList *toxprpl_status_types(PurpleAccount *acct)
     }
 
     return types;
-}
-
-static unsigned char *toxprpl_tox_hex_string_to_id(const char *hex_string)
-{
-    int i;
-    size_t len = strlen(hex_string);
-    unsigned char *bin = g_malloc(len / 2);
-    const char *p = hex_string;
-    for (i = 0; i < len / 2; i++)
-    {
-        sscanf(p, "%2hhx", &bin[i]);
-        p = p + 2;
-    }
-    return bin;
 }
 
 static void toxprpl_login(PurpleAccount *acct)
@@ -666,7 +702,7 @@ static void toxprpl_login(PurpleAccount *acct)
                                           DEFAULT_SERVER_KEY);
     uint32_t resolved = resolve_addr(ip);
     dht.ip.i = resolved;
-    unsigned char *bin_str = toxprpl_tox_hex_string_to_id(key);
+    unsigned char *bin_str = toxprpl_hex_string_to_data(key);
     DHT_bootstrap(dht, bin_str);
     g_free(bin_str);
     purple_debug_info("toxprpl", "Will connect to %s:%d (%s)\n" ,
@@ -739,7 +775,7 @@ static int toxprpl_tox_addfriend(Messenger *m, PurpleConnection *gc,
                                  const char *buddy_key,
                                  gboolean sendrequest)
 {
-    unsigned char *bin_key = toxprpl_tox_hex_string_to_id(buddy_key);
+    unsigned char *bin_key = toxprpl_hex_string_to_data(buddy_key);
     int ret;
 
     if (sendrequest == TRUE)
