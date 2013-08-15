@@ -887,6 +887,16 @@ static void toxprpl_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
 {
     purple_debug_info("toxprpl", "adding %s to buddy list\n", buddy->name);
 
+    buddy->name = g_strstrip(buddy->name);
+    if (strlen(buddy->name) != (FRIEND_ADDRESS_SIZE * 2))
+    {
+        purple_notify_error(gc, _("Error"),
+                            _("Invalid buddy ID given (must be 76 characters "
+                              "long)"), NULL);
+        purple_blist_remove_buddy(buddy);
+        return;
+    }
+
     Messenger *m = purple_connection_get_protocol_data(gc);
     int ret = toxprpl_tox_addfriend(m, gc, buddy->name, TRUE);
     if ((ret < 0) && (ret != FAERR_ALREADYSENT))
