@@ -810,6 +810,9 @@ static int toxprpl_tox_addfriend(Messenger *m, PurpleConnection *gc,
         case FAERR_SETNEWNOSPAM:
             msg = "Can't add friend: wrong nospam ID";
             break;
+        case FAERR_NOMEM:
+            msg = "Could not allocate memory for friendlist";
+            break;
         case FAERR_UNKNOWN:
             msg = "Error adding friend";
             break;
