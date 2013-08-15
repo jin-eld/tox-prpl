@@ -672,7 +672,7 @@ static void toxprpl_login(PurpleAccount *acct)
     purple_debug_info("toxprpl", "logging in %s\n", acct->username);
 
     const char *msg64 = purple_account_get_string(acct, "messenger", NULL);
-    if (msg64 != NULL)
+    if ((msg64 != NULL) && (strlen(msg64) > 0))
     {
         purple_debug_info("toxprpl", "found preference data\n");
         gsize out_len;
@@ -724,13 +724,19 @@ static void toxprpl_close(PurpleConnection *gc)
     Messenger *m = purple_connection_get_protocol_data(gc);
 
     uint32_t msg_size = Messenger_size(m);
-    guchar *msg_data = g_malloc0(msg_size);
-    Messenger_save(m, (uint8_t *)msg_data);
-
-    gchar *msg64 = g_base64_encode(msg_data, msg_size);
-    purple_account_set_string(account, "messenger", msg64);
-    g_free(msg64);
-    g_free(msg_data);
+    if (msg_size > 0)
+    {
+        guchar *msg_data = g_malloc0(msg_size);
+        Messenger_save(m, (uint8_t *)msg_data);
+        gchar *msg64 = g_base64_encode(msg_data, msg_size);
+        purple_account_set_string(account, "messenger", msg64);
+        g_free(msg64);
+        g_free(msg_data);
+    }
+    else
+    {
+        purple_account_set_string(account, "messenger", "");
+    }
 
     purple_debug_info("toxprpl", "shutting down\n");
     purple_timeout_remove(g_tox_messenger_timer);
