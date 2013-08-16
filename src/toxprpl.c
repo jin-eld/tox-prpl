@@ -779,15 +779,20 @@ static int toxprpl_send_im(PurpleConnection *gc, const char *who,
 
 static int toxprpl_tox_addfriend(Messenger *m, PurpleConnection *gc,
                                  const char *buddy_key,
-                                 gboolean sendrequest)
+                                 gboolean sendrequest,
+                                 const char *message)
 {
     unsigned char *bin_key = toxprpl_hex_string_to_data(buddy_key);
     int ret;
 
     if (sendrequest == TRUE)
     {
-        ret = m_addfriend(m, bin_key, (uint8_t *)DEFAULT_REQUEST_MESSAGE,
-                          (uint16_t)strlen(DEFAULT_REQUEST_MESSAGE) + 1);
+        if ((message == NULL) || (strlen(message) == 0))
+        {
+            message = DEFAULT_REQUEST_MESSAGE;
+        }
+        ret = m_addfriend(m, bin_key, (uint8_t *)message,
+                          (uint16_t)strlen(message) + 1);
     }
     else
     {
@@ -848,7 +853,7 @@ static void toxprpl_add_to_buddylist(toxprpl_accept_friend_data *data)
 {
     Messenger *m = purple_connection_get_protocol_data(data->gc);
 
-    int ret = toxprpl_tox_addfriend(m, data->gc, data->buddy_key, FALSE);
+    int ret = toxprpl_tox_addfriend(m, data->gc, data->buddy_key, FALSE, NULL);
     if (ret < 0)
     {
         g_free(data->buddy_key);
@@ -904,7 +909,7 @@ static void toxprpl_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
     }
 
     Messenger *m = purple_connection_get_protocol_data(gc);
-    int ret = toxprpl_tox_addfriend(m, gc, buddy->name, TRUE);
+    int ret = toxprpl_tox_addfriend(m, gc, buddy->name, TRUE, msg);
     if ((ret < 0) && (ret != FAERR_ALREADYSENT))
     {
         purple_blist_remove_buddy(buddy);
@@ -1002,7 +1007,7 @@ static gboolean toxprpl_offline_message(const PurpleBuddy *buddy)
 
 static PurplePluginProtocolInfo prpl_info =
 {
-    OPT_PROTO_NO_PASSWORD | OPT_PROTO_REGISTER_NOSCREENNAME,  /* options */
+    OPT_PROTO_NO_PASSWORD | OPT_PROTO_REGISTER_NOSCREENNAME | OPT_PROTO_INVITE_MESSAGE,  /* options */
     NULL,               /* user_splits, initialized in toxprpl_init() */
     NULL,               /* protocol_options, initialized in toxprpl_init() */
     NO_BUDDY_ICONS,
