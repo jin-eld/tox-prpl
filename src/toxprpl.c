@@ -24,7 +24,13 @@
 #include <string.h>
 #include <time.h>
 
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <glib.h>
+#include <glib/gstdio.h>
 
 #include <Messenger.h>
 #include <network.h>
@@ -66,6 +72,7 @@ extern uint8_t self_public_key[crypto_box_PUBLICKEYBYTES];
 // todo: allow user to specify a contact request message
 #define DEFAULT_REQUEST_MESSAGE _("Please allow me to add you as a friend!")
 
+#define MAX_ACCOUNT_DATA_SIZE   1*1024*1024
 static const char *g_HEX_CHARS = "0123456789abcdef";
 
 static PurplePlugin *g_tox_protocol = NULL;
@@ -148,10 +155,8 @@ typedef struct
 
 static void toxprpl_add_to_buddylist(toxprpl_accept_friend_data *data);
 static void toxprpl_do_not_add_to_buddylist(toxprpl_accept_friend_data *data);
-static void foreach_toxprpl_gc(GcFunc fn, PurpleConnection *from,
-                               gpointer userdata);
-static void discover_status(PurpleConnection *from, PurpleConnection *to,
-        gpointer userdata);
+
+static void toxprpl_login(PurpleAccount *acct);
 static void toxprpl_query_buddy_info(gpointer data, gpointer user_data);
 
 // utilitis
@@ -482,68 +487,6 @@ static gboolean tox_connection_check(gpointer gc)
     return TRUE;
 }
 
-static void call_if_toxprpl(gpointer data, gpointer userdata)
-{
-    PurpleConnection *gc = (PurpleConnection *)(data);
-    GcFuncData *gcfdata = (GcFuncData *)userdata;
-
-    if (!strcmp(gc->account->protocol_id, TOXPRPL_ID))
-        gcfdata->fn(gcfdata->from, gc, gcfdata->userdata);
-}
-
-static void foreach_toxprpl_gc(GcFunc fn, PurpleConnection *from,
-        gpointer userdata)
-{
-    GcFuncData gcfdata = { fn, from, userdata };
-    g_list_foreach(purple_connections_get_all(), call_if_toxprpl,
-            &gcfdata);
-}
-
-
-typedef void(*ChatFunc)(PurpleConvChat *from, PurpleConvChat *to,
-        int id, const char *room, gpointer userdata);
-
-typedef struct
-{
-    ChatFunc fn;
-    PurpleConvChat *from_chat;
-    gpointer userdata;
-} ChatFuncData;
-
-static void discover_status(PurpleConnection *from, PurpleConnection *to,
-        gpointer userdata) {
-    const char *from_username = from->account->username;
-    const char *to_username = to->account->username;
-
-    purple_debug_info("toxprpl", "discover status from %s to %s\n",
-            from_username, to_username);
-    if (purple_find_buddy(from->account, to_username))
-    {
-        PurpleStatus *status = purple_account_get_active_status(to->account);
-        const char *status_id = purple_status_get_id(status);
-        const char *message = purple_status_get_attr_string(status, "message");
-
-        purple_debug_info("toxprpl", "discover status: status id %s\n",
-                status_id);
-        if (!strcmp(status_id, toxprpl_statuses[TOXPRPL_STATUS_ONLINE].id) ||
-                !strcmp(status_id, toxprpl_statuses[TOXPRPL_STATUS_AWAY].id) ||
-                !strcmp(status_id, toxprpl_statuses[TOXPRPL_STATUS_BUSY].id) ||
-                !strcmp(status_id, toxprpl_statuses[TOXPRPL_STATUS_OFFLINE].id))
-        {
-            purple_debug_info("toxprpl", "%s sees that %s is %s: %s\n",
-                    from_username, to_username, status_id, message);
-            purple_prpl_got_user_status(from->account, to_username, status_id,
-                    (message) ? "message" : NULL, message, NULL);
-        }
-        else
-        {
-            purple_debug_error("toxprpl",
-                    "%s's buddy %s has an unknown status: %s, %s",
-                    from_username, to_username, status_id, message);
-        }
-    }
-}
-
 static void toxprpl_set_status(PurpleAccount *account, PurpleStatus *status)
 {
     const char* status_id = purple_status_get_id(status);
@@ -605,14 +548,6 @@ static void toxprpl_query_buddy_info(gpointer data, gpointer user_data)
     }
 }
 
-static void report_status_change(PurpleConnection *from, PurpleConnection *to,
-        gpointer userdata)
-{
-    purple_debug_info("toxprpl", "notifying %s that %s changed status\n",
-            to->account->username, from->account->username);
-    discover_status(to, from, NULL);
-}
-
 static const char *toxprpl_list_icon(PurpleAccount *acct, PurpleBuddy *buddy)
 {
     return "tox";
@@ -639,11 +574,13 @@ static GList *toxprpl_status_types(PurpleAccount *acct)
     return types;
 }
 
-static void toxprpl_login(PurpleAccount *acct)
+static void toxprpl_login_after_setup(PurpleAccount *acct)
 {
     IP_Port dht;
 
     purple_debug_info("toxprpl", "logging in...\n");
+
+    PurpleConnection *gc = purple_account_get_connection(acct);
 
     Messenger *m = initMessenger();
     if (m == NULL)
@@ -654,7 +591,6 @@ static void toxprpl_login(PurpleAccount *acct)
 
     }
 
-    PurpleConnection *gc = purple_account_get_connection(acct);
 
     m_callback_friendmessage(m, on_incoming_message, gc);
     m_callback_namechange(m, on_nick_change, gc);
@@ -674,19 +610,18 @@ static void toxprpl_login(PurpleAccount *acct)
     const char *msg64 = purple_account_get_string(acct, "messenger", NULL);
     if ((msg64 != NULL) && (strlen(msg64) > 0))
     {
-        purple_debug_info("toxprpl", "found preference data\n");
+        purple_debug_info("toxprpl", "found existing account data\n");
         gsize out_len;
         guchar *msg_data = g_base64_decode(msg64, &out_len);
         if (msg_data && (out_len > 0))
         {
-            Messenger_load(m, (uint8_t *)msg_data, (uint32_t)out_len);
+            if (Messenger_load(m, (uint8_t *)msg_data, (uint32_t)out_len) != 0)
+            {
+                purple_debug_info("toxprpl", "Invalid account data\n");
+                purple_account_set_string(acct, "messenger", NULL);
+            }
             g_free(msg_data);
         }
-    }
-    else
-    {
-        purple_debug_info("toxprpl", "preferences not found\n");
-        //purple_account_add_string("/plugins/prpl/tox/messenger", "");
     }
 
     purple_connection_update_progress(gc, _("Connecting"),
@@ -714,14 +649,145 @@ static void toxprpl_login(PurpleAccount *acct)
                                                         gc);
 }
 
+void toxprpl_user_import(PurpleAccount *acct, const char *filename)
+{
+    purple_debug_info("toxprpl", "import user account: %s\n", filename);
+
+    PurpleConnection *gc = purple_account_get_connection(acct);
+
+    GStatBuf sb;
+    if (g_stat(filename, &sb) != 0)
+    {
+        purple_notify_message(gc,
+                PURPLE_NOTIFY_MSG_ERROR,
+                _("Error"),
+                _("Could not access account data file:"),
+                filename,
+                (PurpleNotifyCloseCallback)toxprpl_login,
+                acct);
+        return;
+    }
+
+    if ((sb.st_size == 0) || (sb.st_size > MAX_ACCOUNT_DATA_SIZE))
+    {
+        purple_notify_message(gc,
+                PURPLE_NOTIFY_MSG_ERROR,
+                _("Error"),
+                _("Account data file seems to be invalid"),
+                NULL,
+                (PurpleNotifyCloseCallback)toxprpl_login,
+                acct);
+        return;
+    }
+
+    int fd = open(filename, O_RDONLY);
+    if (fd == -1)
+    {
+        purple_notify_message(gc,
+                PURPLE_NOTIFY_MSG_ERROR,
+                _("Error"),
+                _("Could not open account data file:"),
+                strerror(errno),
+                (PurpleNotifyCloseCallback)toxprpl_login,
+                acct);
+        return;
+    }
+
+    guchar *account_data = g_malloc0(sb.st_size);
+
+    size_t rb = read(fd, account_data, sb.st_size);
+    if (rb < 0)
+    {
+        g_free(account_data);
+        purple_notify_message(gc,
+                PURPLE_NOTIFY_MSG_ERROR,
+                _("Error"),
+                _("Could not read account data file:"),
+                strerror(errno),
+                (PurpleNotifyCloseCallback)toxprpl_login,
+                acct);
+        return;
+    }
+
+    if (rb != sb.st_size)
+    {
+        g_free(account_data);
+        purple_notify_message(gc,
+                PURPLE_NOTIFY_MSG_ERROR,
+                _("Error"),
+                _("Could not read account data file:"),
+                _("short read"),
+                (PurpleNotifyCloseCallback)toxprpl_login,
+                acct);
+        return;
+    }
+
+    gchar *msg64 = g_base64_encode(account_data, sb.st_size);
+    purple_account_set_string(acct, "messenger", msg64);
+    g_free(msg64);
+    g_free(account_data);
+    toxprpl_login(acct);
+}
+
+void toxprpl_user_ask_import(PurpleAccount *acct)
+{
+    purple_debug_info("toxprpl", "ask to import user account\n");
+    PurpleConnection *gc = purple_account_get_connection(acct);
+
+    purple_request_file(gc,
+        _("Import existing Tox account data"),
+        NULL,
+        FALSE,
+        G_CALLBACK(toxprpl_user_import),
+        G_CALLBACK(toxprpl_login),
+        acct,
+        NULL,
+        NULL,
+        acct);
+}
+
+static void toxprpl_login(PurpleAccount *acct)
+{
+    PurpleConnection *gc = purple_account_get_connection(acct);
+
+    // check if we need to run first time setup
+    if (purple_account_get_string(acct, "messenger", NULL) == NULL)
+    {
+        purple_request_action(gc,
+            _("Setup Tox account"),
+            _("This appears to be your first login to the Tox network, "
+              "would you like to start with a new user ID or would you "
+              "like to import an existing one?"),
+            _("Note: you can export / backup your account via the account "
+              "actions menu."),
+            PURPLE_DEFAULT_ACTION_NONE,
+            acct, NULL, NULL,
+            acct, // user data
+            2,    // 2 choices
+            _("Create new Tox account"),
+            G_CALLBACK(toxprpl_login_after_setup),
+            _("Import existing Tox account"),
+            G_CALLBACK(toxprpl_user_ask_import));
+
+    }
+    else
+    {
+        toxprpl_login_after_setup(acct);
+    }
+}
+
+
 static void toxprpl_close(PurpleConnection *gc)
 {
     /* notify other toxprpl accounts */
     purple_debug_info("toxprpl", "Closing!\n");
-    foreach_toxprpl_gc(report_status_change, gc, NULL);
 
     PurpleAccount *account = purple_connection_get_account(gc);
     Messenger *m = purple_connection_get_protocol_data(gc);
+    if (m == NULL)
+    {
+        return;
+    }
 
     uint32_t msg_size = Messenger_size(m);
     if (msg_size > 0)
