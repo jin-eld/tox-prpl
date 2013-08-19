@@ -649,7 +649,7 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
                                                         gc);
 }
 
-void toxprpl_user_import(PurpleAccount *acct, const char *filename)
+static void toxprpl_user_import(PurpleAccount *acct, const char *filename)
 {
     purple_debug_info("toxprpl", "import user account: %s\n", filename);
 
@@ -696,29 +696,23 @@ void toxprpl_user_import(PurpleAccount *acct, const char *filename)
     guchar *account_data = g_malloc0(sb.st_size);
 
     size_t rb = read(fd, account_data, sb.st_size);
-    if (rb < 0)
-    {
-        g_free(account_data);
-        purple_notify_message(gc,
-                PURPLE_NOTIFY_MSG_ERROR,
-                _("Error"),
-                _("Could not read account data file:"),
-                strerror(errno),
-                (PurpleNotifyCloseCallback)toxprpl_login,
-                acct);
-        return;
-    }
-
     if (rb != sb.st_size)
     {
-        g_free(account_data);
+        const char *msg2 = _("short read");
+        if (rb < 0)
+        {
+            msg2 = strerror(errno);
+        }
+
         purple_notify_message(gc,
                 PURPLE_NOTIFY_MSG_ERROR,
                 _("Error"),
                 _("Could not read account data file:"),
-                _("short read"),
+                msg2,
                 (PurpleNotifyCloseCallback)toxprpl_login,
                 acct);
+        g_free(account_data);
+        close(fd);
         return;
     }
 
@@ -727,9 +721,10 @@ void toxprpl_user_import(PurpleAccount *acct, const char *filename)
     g_free(msg64);
     g_free(account_data);
     toxprpl_login(acct);
+    close(fd);
 }
 
-void toxprpl_user_ask_import(PurpleAccount *acct)
+static void toxprpl_user_ask_import(PurpleAccount *acct)
 {
     purple_debug_info("toxprpl", "ask to import user account\n");
     PurpleConnection *gc = purple_account_get_connection(acct);
@@ -1043,6 +1038,91 @@ static void toxprpl_action_set_nick_dialog(PurplePluginAction *action)
             account, account->username, NULL, gc);
 }
 
+
+static void toxprpl_user_export(PurpleConnection *gc, const char *filename)
+{
+    purple_debug_info("toxprpl", "export account to %s\n", filename);
+
+    Messenger *m = purple_connection_get_protocol_data(gc);
+    if (m == NULL)
+    {
+        return;
+    }
+
+    uint32_t msg_size = Messenger_size(m);
+    if (msg_size > 0)
+    {
+        uint8_t *account_data = g_malloc0(msg_size);
+        Messenger_save(m, account_data);
+
+        int fd = open(filename, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+        if (fd == -1)
+        {
+            g_free(account_data);
+            purple_notify_message(gc,
+                    PURPLE_NOTIFY_MSG_ERROR,
+                    _("Error"),
+                    _("Could not save account data file:"),
+                    strerror(errno),
+                    NULL, NULL);
+            return;
+        }
+
+        size_t wb = write(fd, account_data, msg_size);
+        if (wb != msg_size)
+        {
+            const char *msg2 = NULL;
+            if (wb < 0)
+            {
+                msg2 = strerror(errno);
+            }
+            purple_notify_message(gc,
+                    PURPLE_NOTIFY_MSG_ERROR,
+                    _("Error"),
+                    _("Could not save account data file:"),
+                    msg2,
+                    (PurpleNotifyCloseCallback)toxprpl_login,
+                    acct);
+            g_free(account_data);
+            close(fd);
+            return;
+        }
+
+        g_free(account_data);
+        close(fd);
+    }
+}
+
+static void toxprpl_export_account_dialog(PurplePluginAction *action)
+{
+    purple_debug_info("toxprpl", "ask to export account\n");
+
+    PurpleConnection *gc = (PurpleConnection*)action->context;
+    PurpleAccount *account = purple_connection_get_account(gc);
+    Messenger *m = purple_connection_get_protocol_data(gc);
+    if (m == NULL)
+    {
+        return;
+    }
+
+    uint8_t bin_id[FRIEND_ADDRESS_SIZE];
+    getaddress(m, bin_id);
+    gchar *id = toxprpl_tox_friend_id_to_string(bin_id);
+    strcpy(id+CLIENT_ID_SIZE, ".tox\0"); // insert extension instead of nospam
+
+    purple_request_file(gc,
+        _("Export existing Tox account data"),
+        id,
+        TRUE,
+        G_CALLBACK(toxprpl_user_export),
+        NULL,
+        account,
+        NULL,
+        NULL,
+        gc);
+    g_free(id);
+}
+
 static GList *toxprpl_account_actions(PurplePlugin *plugin, gpointer context)
 {
     purple_debug_info("toxprpl", "setting up account actions\n");
@@ -1052,6 +1132,10 @@ static GList *toxprpl_account_actions(PurplePlugin *plugin, gpointer context)
 
     action = purple_plugin_action_new(_("Set nickname..."),
              toxprpl_action_set_nick_dialog);
+    actions = g_list_append(actions, action);
+
+    action = purple_plugin_action_new(_("Export account data..."),
+            toxprpl_export_account_dialog);
     actions = g_list_append(actions, action);
     return actions;
 }
