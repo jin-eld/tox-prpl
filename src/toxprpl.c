@@ -759,10 +759,10 @@ static void toxprpl_login(PurpleAccount *acct)
             acct, NULL, NULL,
             acct, // user data
             2,    // 2 choices
-            _("Create new Tox account"),
-            G_CALLBACK(toxprpl_login_after_setup),
             _("Import existing Tox account"),
-            G_CALLBACK(toxprpl_user_ask_import));
+            G_CALLBACK(toxprpl_user_ask_import),
+            _("Create new Tox account"),
+            G_CALLBACK(toxprpl_login_after_setup));
 
     }
     else
