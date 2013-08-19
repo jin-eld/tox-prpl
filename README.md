@@ -27,6 +27,8 @@ buggy and won't crash and burn):
 * handling status changes
 * setting status messages
 * setting your own nickname
+* exporting Tox account data (i.e. for migration to another system / client)
+* account setup wizard (create new account / import existing Tox account data)
 
 ## Limitations
 
@@ -36,7 +38,7 @@ Also, if you disable and enable the account again - you will be in troubles
 because the Tox library does not support shutdown and re-initilization.
 
 ## TODO
-* improve the code, integration of the Tox lib is not really ideal
+* implement /me actions
 
 ### Compiling on Linux
 
