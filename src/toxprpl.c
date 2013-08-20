@@ -343,6 +343,29 @@ static void on_request(uint8_t* public_key, uint8_t* data,
     g_free(request_msg);
 }
 
+static void on_friend_action(Messenger *m, int friendnum, uint8_t* string,
+                             uint16_t length, void *user_data)
+{
+    purple_debug_info("toxprpl", "action received\n");
+    PurpleConnection *gc = (PurpleConnection *)user_data;
+
+    uint8_t client_id[CLIENT_ID_SIZE];
+    if (getclient_id(m, friendnum, client_id) < 0)
+    {
+        purple_debug_info("toxprpl", "Could not get id of friend %d\n",
+                          friendnum);
+        return;
+    }
+
+    gchar *buddy_key = toxprpl_tox_bin_id_to_string(client_id);
+    gchar *message = g_strdup_printf("/me %s", string);
+
+    serv_got_im(gc, buddy_key, message, PURPLE_MESSAGE_RECV,
+                time(NULL));
+    g_free(buddy_key);
+    g_free(message);
+}
+
 static void on_incoming_message(Messenger *m, int friendnum, uint8_t* string,
                                 uint16_t length, void *user_data)
 {
@@ -597,6 +620,7 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     m_callback_userstatus(m, on_status_change, gc);
     m_callback_friendrequest(m, on_request, gc);
     m_callback_connectionstatus(m, on_connectionstatus, gc);
+    m_callback_action(m, on_friend_action, gc);
 
     purple_debug_info("toxprpl", "initialized tox callbacks\n");
 
@@ -829,8 +853,17 @@ static int toxprpl_send_im(PurpleConnection *gc, const char *who,
     }
     Messenger *m = purple_connection_get_protocol_data(gc);
     char *no_html = purple_markup_strip_html(message);
-    m_sendmessage(m, buddy_data->tox_friendlist_number, (uint8_t *)no_html,
-                  strlen(message)+1);
+
+    if (purple_message_meify(no_html, -1))
+    {
+        m_sendaction(m, buddy_data->tox_friendlist_number, (uint8_t *)no_html,
+                strlen(message)+1);
+    }
+    else
+    {
+        m_sendmessage(m, buddy_data->tox_friendlist_number, (uint8_t *)no_html,
+                strlen(message)+1);
+    }
     if (no_html)
     {
         free(no_html);
