@@ -29,6 +29,7 @@ buggy and won't crash and burn):
 * setting your own nickname
 * exporting Tox account data (i.e. for migration to another system / client)
 * account setup wizard (create new account / import existing Tox account data)
+* support for /me actions
 
 ## Limitations
 
@@ -38,7 +39,7 @@ Also, if you disable and enable the account again - you will be in troubles
 because the Tox library does not support shutdown and re-initilization.
 
 ## TODO
-* implement /me actions
+* fill in a dummy username for new accounts in the account dialog to auto enable the save buton
 
 ### Compiling on Linux
 
