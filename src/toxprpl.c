@@ -449,10 +449,10 @@ static gboolean tox_messenger_loop(gpointer data)
 
 static gboolean tox_connection_check(gpointer gc)
 {
-    if ((g_connected == 0) && DHT_isconnected())
+    Messenger *m = purple_connection_get_protocol_data(gc);
+    if ((g_connected == 0) && DHT_isconnected(m->dht))
     {
         g_connected = 1;
-        Messenger *m = purple_connection_get_protocol_data(gc);
         purple_connection_update_progress(gc, _("Connected"),
                 1,   /* which connection step this is */
                 2);  /* total number of steps */
@@ -499,7 +499,7 @@ static gboolean tox_connection_check(gpointer gc)
             }
         }
     }
-    else if ((g_connected == 1) && !DHT_isconnected())
+    else if ((g_connected == 1) && !DHT_isconnected(m->dht))
     {
         g_connected = 0;
         purple_debug_info("toxprpl", "DHT not connected!\n");
@@ -662,7 +662,7 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     uint32_t resolved = resolve_addr(ip);
     dht.ip.i = resolved;
     unsigned char *bin_str = toxprpl_hex_string_to_data(key);
-    DHT_bootstrap(dht, bin_str);
+    DHT_bootstrap(m->dht, dht, bin_str);
     g_free(bin_str);
     purple_debug_info("toxprpl", "Will connect to %s:%d (%s)\n" ,
                       ip, ntohs(dht.port), key);
