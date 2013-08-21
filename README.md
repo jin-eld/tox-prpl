@@ -30,13 +30,12 @@ buggy and won't crash and burn):
 * exporting Tox account data (i.e. for migration to another system / client)
 * account setup wizard (create new account / import existing Tox account data)
 * support for /me actions
+* support multiple tox accounts simultaneously
 
 ## Limitations
 
-Right now you can only have one Tox account, trying to set up more will lead to
-disaster because the Tox library does not support multiple instances.
-Also, if you disable and enable the account again - you will be in troubles
-because the Tox library does not support shutdown and re-initilization.
+Currently it's not clear what will happen if you use the same data file
+on several clients and go online at the same time.
 
 ## TODO
 * fill in a dummy username for new accounts in the account dialog to auto enable the save buton
