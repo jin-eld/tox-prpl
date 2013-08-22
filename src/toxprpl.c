@@ -448,19 +448,12 @@ static gboolean tox_connection_check(gpointer gc)
         purple_connection_set_state(gc, PURPLE_CONNECTED);
         purple_debug_info("toxprpl", "DHT connected!\n");
 
-        uint8_t bin_id[FRIEND_ADDRESS_SIZE];
-        getaddress(plugin->m, bin_id);
-        gchar *id = toxprpl_tox_friend_id_to_string(bin_id);
-        purple_debug_info("toxprpl", "My ID: %s\n", id);
-
         // query status of all buddies
         PurpleAccount *account = purple_connection_get_account(gc);
         GSList *buddy_list = purple_find_buddies(account, NULL);
         g_slist_foreach(buddy_list, toxprpl_query_buddy_info, gc);
         g_slist_free(buddy_list);
 
-        purple_account_set_username(account, id);
-        g_free(id);
         uint8_t our_name[MAX_NAME_LENGTH];
         uint16_t name_len = getself_name(plugin->m, our_name, MAX_NAME_LENGTH);
         // bug in the library?
