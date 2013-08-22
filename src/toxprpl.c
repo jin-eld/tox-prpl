@@ -1058,6 +1058,30 @@ static void toxprpl_set_nick_action(PurpleConnection *gc,
     }
 }
 
+static void toxprpl_show_id_dialog_closed(gchar *id)
+{
+    g_free(id);
+}
+
+static void toxprpl_action_show_id_dialog(PurplePluginAction *action)
+{
+    PurpleConnection *gc = (PurpleConnection*)action->context;
+
+    toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
+
+    uint8_t bin_id[FRIEND_ADDRESS_SIZE];
+    getaddress(plugin->m, bin_id);
+    gchar *id = toxprpl_tox_friend_id_to_string(bin_id);
+
+    purple_notify_message(gc,
+            PURPLE_NOTIFY_MSG_INFO,
+            _("Account ID"),
+            _("If someone wants to add you, give them this ID:"),
+            id,
+            (PurpleNotifyCloseCallback)toxprpl_show_id_dialog_closed,
+            id);
+}
+
 static void toxprpl_action_set_nick_dialog(PurplePluginAction *action)
 {
     PurpleConnection *gc = (PurpleConnection*)action->context;
@@ -1183,6 +1207,10 @@ static GList *toxprpl_account_actions(PurplePlugin *plugin, gpointer context)
 
     GList *actions = NULL;
     PurplePluginAction *action;
+
+    action = purple_plugin_action_new(_("Show my id..."),
+             toxprpl_action_show_id_dialog);
+    actions = g_list_append(actions, action);
 
     action = purple_plugin_action_new(_("Set nickname..."),
              toxprpl_action_set_nick_dialog);
