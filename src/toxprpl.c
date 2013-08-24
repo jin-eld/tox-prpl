@@ -1080,23 +1080,15 @@ static void toxprpl_action_set_nick_dialog(PurplePluginAction *action)
     PurpleConnection *gc = (PurpleConnection*)action->context;
     PurpleAccount *account = purple_connection_get_account(gc);
 
-    PurpleRequestFields *fields;
-    PurpleRequestFieldGroup *group;
-    PurpleRequestField *field;
-
-    fields = purple_request_fields_new();
-    group = purple_request_field_group_new(NULL);
-    purple_request_fields_add_group(fields, group);
-
-    field = purple_request_field_string_new("text_nickname",
-                    _("Nickname"),
-                    purple_account_get_string(account, "nickname", ""), FALSE);
-
-    purple_request_field_group_add_field(group, field);
-    purple_request_fields(gc, _("Set your nickname"), NULL, NULL, fields,
-            _("_Set"), G_CALLBACK(toxprpl_set_nick_action),
-            _("_Cancel"), NULL,
-            account, account->username, NULL, gc);
+    purple_request_input(gc, _("Set nickname"),
+                         _("New nickname:"),
+                         NULL,
+                         purple_account_get_string(account, "nickname", ""),
+                         FALSE, FALSE, NULL,
+                         _("_Set"), G_CALLBACK(toxprpl_set_nick_action),
+                         _("_Cancel"), NULL,
+                         account, account->username, NULL,
+                         gc);
 }
 
 
