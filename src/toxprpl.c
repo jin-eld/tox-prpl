@@ -1103,13 +1103,10 @@ static void toxprpl_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
     }
 }
 
-static void toxprpl_set_nick_action(PurpleConnection *gc,
-                                    PurpleRequestFields *fields)
+static void toxprpl_set_nick_action(PurpleConnection *gc, const char *nickname)
 {
     PurpleAccount *account = purple_connection_get_account(gc);
     toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
-    const char *nickname = purple_request_fields_get_string(fields,
-                                                            "text_nickname");
     if (nickname != NULL)
     {
         purple_connection_set_display_name(gc, nickname);
