@@ -1171,6 +1171,8 @@ static void toxprpl_user_export(PurpleConnection *gc, const char *filename)
         return;
     }
 
+    PurpleAccount *account = purple_connection_get_account(gc);
+
     uint32_t msg_size = tox_size(plugin->tox);
     if (msg_size > 0)
     {
@@ -1204,7 +1206,7 @@ static void toxprpl_user_export(PurpleConnection *gc, const char *filename)
                     _("Could not save account data file:"),
                     msg2,
                     (PurpleNotifyCloseCallback)toxprpl_login,
-                    acct);
+                    account);
             g_free(account_data);
             close(fd);
             return;
