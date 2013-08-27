@@ -674,8 +674,6 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     const char* ip = purple_account_get_string(acct, "dht_server",
                                                DEFAULT_SERVER_IP);
     uint32_t resolved = toxprpl_resolve_ip(gc, ip);
-    purple_debug_info("toxprpl", "%s resolved to %lld\n",
-            ip, (long long)resolved);
     if (resolved == 0)
     {
         purple_connection_error_reason(gc,
