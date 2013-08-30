@@ -1,0 +1,188 @@
+; The original nsi script was imported from:
+; Classic Battle.net Plugin for Pidgin, GPLv3
+; https://github.com/nmbook/pidgin-libbnet.git
+
+;Include Modern UI
+!include "MUI2.nsh"
+
+;----------------------------------------------------------------------------
+; Title             : Go to a NSIS page
+; Short Name        : RelGotoPage
+; Last Changed      : 22/Feb/2005
+; Code Type         : Function
+; Code Sub-Type     : Special Restricted Call, One-way StrCpy Input
+;----------------------------------------------------------------------------
+; Description       : Makes NSIS to go to a specified page relatively from
+;                     the current page. See this below for more information:
+;                     "http://nsis.sf.net/wiki/Go to a NSIS page"
+;----------------------------------------------------------------------------
+; Function Call     : StrCpy $R9 "(number|X)"
+;
+;                     - If a number &gt; 0: Goes foward that number of
+;                       pages. Code of that page will be executed, not
+;                       returning to this point. If it excess the number of
+;                       pages that are after that page, it simulates a
+;                       "Cancel" click.
+;
+;                     - If a number &lt; 0: Goes back that number of pages.
+;                       Code of that page will be executed, not returning to
+;                       this point. If it excess the number of pages that
+;                       are before that page, it simulates a "Cancel" click.
+;
+;                     - If X: Simulates a "Cancel" click. Code will go to
+;                       callback functions, not returning to this point.
+;
+;                     - If 0: Continues on the same page. Code will still
+;                        be running after the call.
+;
+;                     Call RelGotoPage
+;----------------------------------------------------------------------------
+; Author            : Diego Pedroso
+; Author Reg. Name  : deguix
+;----------------------------------------------------------------------------
+
+Function RelGotoPage
+  IntCmp $R9 0 0 Move Move
+    StrCmp $R9 "X" 0 Move
+      StrCpy $R9 "120"
+
+  Move:
+  SendMessage $HWNDPARENT "0x408" "$R9" ""
+FunctionEnd
+
+;General
+Name "Tox Protocol Plugin For Pidgin"
+OutFile "@top_builddir@\build\tox-prpl-pidgin-@VERSION@.exe"
+
+ShowInstDetails show
+ShowUninstDetails show
+
+InstallDir ""
+
+Function .onInit
+    ReadRegStr $0 HKLM "Software\Pidgin" ""
+    IfErrors 0 NoError
+        StrCpy $InstDir "$PROGRAMFILES\Pidgin"
+        Goto Pass
+    NoError:
+        StrCpy $InstDir "$0"
+    Pass:
+FunctionEnd
+
+InstallDirRegKey HKLM "SOFTWARE\pidgin\tox-prpl" "Install_Dir"
+
+;Request application privileges for Windows Vista
+RequestExecutionLevel admin
+
+BrandingText "tox-prpl-pidgin @VERSION@"
+
+;Interface Settings
+!define MUI_ICON @top_srcdir@@OS_PATH_SEPARATOR@nsis@OS_PATH_SEPARATOR@tox.ico
+
+!define MUI_HEADERIMAGE
+;!define MUI_HEADERIMAGE_BITMAP @top_srcdir@\pixmaps\hdr.bmp
+;!define MUI_WELCOMEFINISHPAGE_BITMAP @top_srcdir@\pixmaps\welcome.bmp
+
+!define MUI_FINISHPAGE_NOAUTOCLOSE
+!define MUI_UNFINISHPAGE_NOAUTOCLOSE
+
+!define MUI_ABORTWARNING
+
+;Page Settings
+!define MUI_DIRECTORYPAGE_TEXT_TOP "The setup program will install Tox Protocol Plugin For Pidgin in the following directory. This must be the location where Pidgin is installed. If Pidgin is installed in a different directory, click the [Browse] button and locate it. Click [Install] to start the installation.$\r$\n$\r$\nWARNING: Tox core library is currently in pre-alpha state! It is possible that there are still bugs and security issues. Use for testing only!"
+
+!define MUI_DIRECTORYPAGE_TEXT_DESTINATION "Pidgin Install Directory"
+
+!define MUI_FINISHPAGE_TEXT "The Tox Protocol Plugin For Pidgin has been installed.$\r$\n$\r$\nIf Pidgin is running, you must restart it, so that the plugin gets recognized."
+
+!define MUI_FINISHPAGE_NOREBOOTSUPPORT
+
+;Pages
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_LICENSE @top_srcdir@\COPYING
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+
+!insertmacro MUI_UNPAGE_WELCOME
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+!insertmacro MUI_UNPAGE_FINISH
+
+;Languages
+!insertmacro MUI_LANGUAGE "English"
+
+;Installer Section
+Section "tox-prpl"
+
+    SetOutPath "$INSTDIR"
+
+    IfFileExists "$INSTDIR\pidgin.exe" PidginInstalled AbortNotInstalled
+
+    AbortNotInstalled:
+        MessageBox MB_ICONSTOP "Pidgin could not be found in $\"$INSTDIR$\". Install Pidgin or select the correct location where it is installed, then try again."
+
+        DetailPrint "Pidgin could not be found in $\"$INSTDIR$\"."
+        DetailPrint "Install Pidgin or select the correct location where it is installed, then try again."
+        StrCpy $R9 -1
+        Call RelGotoPage
+        Goto Exit
+
+    PidginInstalled:
+
+    CheckPidginOpen:
+        Delete "plugins\libtox.dll"
+        Delete "libtoxcore-0.dll"
+        Delete "libsodium-4.dll"
+
+        IfErrors PidginOpen
+            Goto CreateAndContinue
+
+    PidginOpen:
+        MessageBox MB_RETRYCANCEL "The installer cannot update the plugin because Pidgin is currently running. Close Pidgin and press Retry." IDRETRY CheckPidginOpen IDCANCEL AbortCurrentlyOpen
+
+    AbortCurrentlyOpen:
+        DetailPrint "The installer cannot update the plugin because Pidgin is currently running."
+        DetailPrint "You cancelled the operation."
+        DetailPrint "The installer will exit."
+        Quit
+
+    CreateAndContinue:
+
+        ;Store installation folder
+        WriteRegStr HKLM "SOFTWARE\Pidgin\tox-prpl" "Install_Dir" "$INSTDIR"
+
+        File "/oname=plugins\libtox.dll" @DEPS_PATH@@OS_PATH_SEPARATOR@lib@OS_PATH_SEPARATOR@purple-2@OS_PATH_SEPARATOR@libtox.dll
+        File "/oname=libtoxcore-0.dll" @DEPS_PATH@@OS_PATH_SEPARATOR@bin@OS_PATH_SEPARATOR@libtoxcore-0.dll
+        File "/oname=libsodium-4.dll" @DEPS_PATH@@OS_PATH_SEPARATOR@bin@OS_PATH_SEPARATOR@libsodium-4.dll
+
+        File "/oname=pixmaps\pidgin\protocols\16\tox.png" @top_srcdir@@OS_PATH_SEPARATOR@pixmaps@OS_PATH_SEPARATOR@protocols@OS_PATH_SEPARATOR@16@OS_PATH_SEPARATOR@tox.png
+        File "/oname=pixmaps\pidgin\protocols\22\tox.png" @top_srcdir@@OS_PATH_SEPARATOR@pixmaps@OS_PATH_SEPARATOR@protocols@OS_PATH_SEPARATOR@22@OS_PATH_SEPARATOR@tox.png
+        File "/oname=pixmaps\pidgin\protocols\48\tox.png" @top_srcdir@@OS_PATH_SEPARATOR@pixmaps@OS_PATH_SEPARATOR@protocols@OS_PATH_SEPARATOR@48@OS_PATH_SEPARATOR@tox.png
+
+        ; Write the uninstall keys for Winblows
+        WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\tox-prpl" "DisplayName" "Tox Protocol Plugin For Pidgin"
+        WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\tox-prpl" "UninstallString" '"$INSTDIR\uninstall-tox-prpl.exe"'
+        WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\tox-prpl" "NoModify" 1
+        WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\tox-prpl" "NoRepair" 1
+        WriteUninstaller "uninstall-tox-prpl.exe"
+    Exit:
+SectionEnd
+
+;Uninstaller Section
+Section "Uninstall"
+
+    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\tox-prpl"
+    DeleteRegKey HKLM SOFTWARE\Pidgin\tox-prpl
+    Delete "$INSTDIR\plugins\libtox.dll"
+
+    Delete "$INSTDIR\libtoxcore-0.dll"
+    Delete "$INSTDIR\libsodium-4.dll"
+
+    Delete "$INSTDIR\pixmaps\pidgin\protocols\16\tox.png"
+    Delete "$INSTDIR\pixmaps\pidgin\protocols\22\tox.png"
+    Delete "$INSTDIR\pixmaps\pidgin\protocols\48\tox.png"
+
+    Delete "$INSTDIR\uninstall-tox-prpl.exe"
+
+SectionEnd

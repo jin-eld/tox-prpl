@@ -82,12 +82,17 @@ PKG_CHECK_MODULES(LIBTOXCORE, [libtoxcore])
 
 EXTRA_LT_LDFLAGS="-avoid-version"
 
+OS_PATH_SEPARATOR="/"
+
+DEPS_PATH="$prefix"
+
 WIN32="no"
 AC_CANONICAL_HOST
 case $host_os in
     *mingw*)
         WIN32="yes"
         EXTRA_LT_LDFLAGS="$EXTRA_LT_LDFLAGS -module -no-undefined"
+        OS_PATH_SEPARATOR="\\"
     ;;
     *darwin* | *rhapsody* | *macosx*)
     ;;
@@ -95,6 +100,17 @@ case $host_os in
         EXTRA_LT_LDFLAGS="$EXTRA_LT_LDFLAGS -module"
     ;;
 esac
+
+if test "x$WIN32" = "xyes"; then
+    here=`pwd`
+    $(MKDIR_P) $prefix
+    cd $prefix
+    DEPS_PATH=`pwd -W | $SED 's/\//\\\/g'`
+    cd $here
+fi
+
+AC_SUBST(DEPS_PATH)
+AC_SUBST(OS_PATH_SEPARATOR)
 
 if test "x$WIN32" = "xyes"; then
     AC_CHECK_LIB(ws2_32, main,
@@ -116,9 +132,12 @@ heck your MinGW installation])
              [enable getaddrinfo/freeaddrinfo for XP and higher])
 fi
 
+AC_PATH_PROG([MAKENSIS], [makensis${EXEEXT}], [no])
+AM_CONDITIONAL(HAVE_NSIS, test "x$MAKENSIS" != "xno")
 
 AC_CONFIG_FILES([Makefile
                  build/Makefile
                  pixmaps/Makefile
+                 nsis/tox-prpl.nsi
                 ])
 AC_OUTPUT

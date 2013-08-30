@@ -3,6 +3,8 @@
 Makefile
 *~
 *.in
+!nsis/tox-prpl.nsi.in
+*.nsi
 
 # Vim
 *.swp
