@@ -873,6 +873,14 @@ static void toxprpl_login(PurpleAccount *acct)
             _("Create new Tox account"),
             G_CALLBACK(toxprpl_login_after_setup));
 
+        purple_notify_warning(gc,
+                _("Development Version Warning"),
+                _("This plugin is based on a development version of the "
+                  "Tox library. There has not yet been an alpha nor a beta "
+                  "release, the library is still 'work in progress' in "
+                  "pre-alpha state.\n\n"
+                  "This means that your conversations MAY NOT YET BE "
+                  "SECURE!"), NULL);
     }
     else
     {
