@@ -20,14 +20,25 @@
  *  which is disributed under GPL v2 or later.  See http://pidgin.im/
  */
 
+#ifdef HAVE_CONFIG_H
+    #include "autoconfig.h"
+#endif
+
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
 
 #include <errno.h>
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
+#ifdef __WIN32__
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+#else
+    #include <sys/socket.h>
+    #include <netdb.h>
+    #include <arpa/inet.h>
+#endif
+
 #include <sys/stat.h>
 #include <fcntl.h>
 
@@ -38,10 +49,6 @@
 #include <network.h>
 
 #define PURPLE_PLUGINS
-
-#ifdef HAVE_CONFIG_H
-#include "autoconfig.h"
-#endif
 
 #include <account.h>
 #include <accountopt.h>
@@ -58,7 +65,6 @@
 #include <status.h>
 #include <util.h>
 #include <version.h>
-#include <arpa/inet.h>
 
 #define _(msg) msg // might add gettext later
 
@@ -151,8 +157,22 @@ static void toxprpl_query_buddy_info(gpointer data, gpointer user_data);
 static uint32_t toxprpl_resolve_ip(PurpleConnection *gc, const char *address)
 {
     struct addrinfo hints;
-    struct addrinfo *result, *rp;
+    struct addrinfo *result = NULL;
+    struct addrinfo *rp = NULL;
     int s, sfd;
+
+#ifdef __WIN32__
+    int res;
+    WSADATA wsa_data;
+
+    res = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+    if (res != 0)
+    {
+        purple_notify_error(gc, _("Error"), _("Could not get IP:"),
+                            _("failed to initialize WinSock"));
+        return 0;
+    }
+#endif
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_INET; // tox has no IPv6 support yet?
@@ -168,6 +188,9 @@ static uint32_t toxprpl_resolve_ip(PurpleConnection *gc, const char *address)
     {
         purple_notify_error(gc, _("Error"), _("Could not get IP:"),
                             gai_strerror(s));
+#ifdef __WIN32__
+        WSACleanup();
+#endif
         return 0;
     }
 
@@ -191,11 +214,17 @@ static uint32_t toxprpl_resolve_ip(PurpleConnection *gc, const char *address)
         purple_notify_error(gc, _("Error"), _("Could not connect to:"),
                             address);
         freeaddrinfo(result);
+#ifdef __WIN32__
+        WSACleanup();
+#endif
         return 0;
     }
 
     uint32_t addr = ((struct sockaddr_in *)rp->ai_addr)->sin_addr.s_addr;
     freeaddrinfo(result);
+#ifdef __WIN32__
+    WSACleanup();
+#endif
     return addr;
 }
 
@@ -645,8 +674,6 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     const char* ip = purple_account_get_string(acct, "dht_server",
                                                DEFAULT_SERVER_IP);
     uint32_t resolved = toxprpl_resolve_ip(gc, ip);
-    purple_debug_info("toxprpl", "%s resolved to %lld\n",
-            ip, (long long)resolved);
     if (resolved == 0)
     {
         purple_connection_error_reason(gc,

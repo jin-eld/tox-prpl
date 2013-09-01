@@ -3,7 +3,7 @@ EXTRA_DIST = \
 
 TOXSOURCES = $(top_srcdir)/src/toxprpl.c
 
-libtox_la_LDFLAGS = -module -avoid-version
+libtox_la_LDFLAGS = $(EXTRA_LT_LDFLAGS)
 
 # todo: check and pass value from configure
 PURPLE_MAJOR_VERSION = "2"
