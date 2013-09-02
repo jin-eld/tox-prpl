@@ -1110,8 +1110,10 @@ static void toxprpl_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
 
     toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
     int ret = toxprpl_tox_addfriend(plugin->tox, gc, buddy->name, TRUE, msg);
-    if ((ret < 0) && (ret != TOX_FAERR_ALREADYSENT))
+    if (ret < 0)
     {
+        purple_debug_info("toxprpl", "adding buddy %s failed (%d)\n",
+                          buddy->name, ret);
         purple_blist_remove_buddy(buddy);
         return;
     }
