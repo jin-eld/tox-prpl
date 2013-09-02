@@ -111,6 +111,7 @@ fi
 
 AC_SUBST(DEPS_PATH)
 AC_SUBST(OS_PATH_SEPARATOR)
+AC_SUBST(EXTRA_LT_LDFLAGS)
 
 if test "x$WIN32" = "xyes"; then
     AC_CHECK_LIB(ws2_32, main,
