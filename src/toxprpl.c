@@ -598,8 +598,8 @@ static void toxprpl_set_status(PurpleAccount *account, PurpleStatus *status)
     {
         tox_set_statusmessage(plugin->tox, (uint8_t *)message, strlen(message) + 1);
     }
-    // FOKEL
 }
+
 // query buddy status
 static void toxprpl_query_buddy_info(gpointer data, gpointer user_data)
 {
