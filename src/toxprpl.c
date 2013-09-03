@@ -936,6 +936,15 @@ static void toxprpl_close(PurpleConnection *gc)
     g_free(plugin);
 }
 
+/**
+ * This PRPL function should return a positive value on success.
+ * If the message is too big to be sent, return -E2BIG.  If
+ * the account is not connected, return -ENOTCONN.  If the
+ * PRPL is unable to send the message for another reason, return
+ * some other negative value.  You can use one of the valid
+ * errno values, or just big something.  If the message should
+ * not be echoed to the conversation window, return 0.
+ */
 static int toxprpl_send_im(PurpleConnection *gc, const char *who,
         const char *message, PurpleMessageFlags flags)
 {
@@ -944,37 +953,45 @@ static int toxprpl_send_im(PurpleConnection *gc, const char *who,
     purple_debug_info("toxprpl", "sending message from %s to %s\n",
             from_username, who);
 
+    int message_sent = -999;
+
     PurpleAccount *account = purple_connection_get_account(gc);
     PurpleBuddy *buddy = purple_find_buddy(account, who);
     if (buddy == NULL)
     {
         purple_debug_info("toxprpl", "Can't send message because buddy %s was not found\n", who);
-        return 0;
+        return message_sent;
     }
     toxprpl_buddy_data *buddy_data = purple_buddy_get_protocol_data(buddy);
     if (buddy_data == NULL)
     {
          purple_debug_info("toxprpl", "Can't send message because tox friend number is unknown\n");
-        return 0;
+        return message_sent;
     }
     toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
     char *no_html = purple_markup_strip_html(message);
 
     if (purple_message_meify(no_html, -1))
     {
-        tox_sendaction(plugin->tox, buddy_data->tox_friendlist_number,
-                                    (uint8_t *)no_html, strlen(message)+1);
+        if (tox_sendaction(plugin->tox, buddy_data->tox_friendlist_number,
+                                    (uint8_t *)no_html, strlen(message)+1) == 1)
+        {
+            message_sent = 1;
+        }
     }
     else
     {
-        tox_sendmessage(plugin->tox, buddy_data->tox_friendlist_number,
-                                   (uint8_t *)no_html, strlen(message)+1);
+        if (tox_sendmessage(plugin->tox, buddy_data->tox_friendlist_number,
+                                   (uint8_t *)no_html, strlen(message)+1) != 0)
+        {
+            message_sent = 1;
+        }
     }
     if (no_html)
     {
         free(no_html);
     }
-    return 1;
+    return message_sent;
 }
 
 static int toxprpl_tox_addfriend(Tox *tox, PurpleConnection *gc,
