@@ -568,8 +568,10 @@ static gboolean tox_connection_check(gpointer gc)
     else if ((plugin->connected == 1) && !tox_isconnected(plugin->tox))
     {
         plugin->connected = 0;
-        purple_debug_info("toxprpl", "DHT not connected!\n");
-        purple_connection_update_progress(gc, _("Connecting"),
+        purple_debug_info("toxprpl", "DHT disconnected!\n");
+        purple_connection_notice(gc,
+                _("Connection to DHT server lost, attempging to reconnect..."));
+        purple_connection_update_progress(gc, _("Reconnecting..."),
                 0,   /* which connection step this is */
                 2);  /* total number of steps */
     }
