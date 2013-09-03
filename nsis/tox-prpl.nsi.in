@@ -52,7 +52,7 @@ FunctionEnd
 
 ;General
 Name "Tox Protocol Plugin For Pidgin"
-OutFile "@top_builddir@\build\tox-prpl-pidgin-@VERSION@.exe"
+OutFile "@top_builddir@\build\tox-prpl-pidgin-installer-@VERSION@.exe"
 
 ShowInstDetails show
 ShowUninstDetails show
