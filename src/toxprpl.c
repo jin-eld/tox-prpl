@@ -747,7 +747,7 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     toxprpl_plugin_data *plugin = g_new0(toxprpl_plugin_data, 1);
 
     plugin->tox = tox;
-    plugin->tox_timer = purple_timeout_add(100, tox_messenger_loop, gc);
+    plugin->tox_timer = purple_timeout_add(80, tox_messenger_loop, gc);
     purple_debug_info("toxprpl", "added messenger timer as %d\n",
                       plugin->tox_timer);
     plugin->connection_timer = purple_timeout_add_seconds(2,
