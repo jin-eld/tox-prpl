@@ -1,0 +1,5 @@
+Tox Protocol Plugin For Pidgin / libpurple
+
+v0.1.0	03.09.2013
+	* first release, more or less feature complete, covers functionality
+	  that is provided by Tox core rev 36ac8e461e9f65d99ed5da12a9c631448d24f897
