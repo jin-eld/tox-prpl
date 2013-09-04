@@ -81,7 +81,6 @@
 #define DEFAULT_SERVER_PORT 33445
 #define DEFAULT_SERVER_IP   "192.184.81.118"
 
-// todo: allow user to specify a contact request message
 #define DEFAULT_REQUEST_MESSAGE _("Please allow me to add you as a friend!")
 
 #define MAX_ACCOUNT_DATA_SIZE   1*1024*1024
@@ -112,6 +111,8 @@ typedef struct
     guint tox_timer;
     guint connection_timer;
     guint connected;
+    PurpleCmdId myid_command_id;
+    PurpleCmdId nick_command_id;
 } toxprpl_plugin_data;
 
 #define TOXPRPL_MAX_STATUS          4
@@ -673,6 +674,48 @@ static GList *toxprpl_status_types(PurpleAccount *acct)
     return types;
 }
 
+static void toxprpl_set_nick_action(PurpleConnection *gc, const char *nickname)
+{
+    PurpleAccount *account = purple_connection_get_account(gc);
+    toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
+    if (nickname != NULL)
+    {
+        purple_connection_set_display_name(gc, nickname);
+        tox_setname(plugin->tox, (uint8_t *)nickname, strlen(nickname) + 1);
+        purple_account_set_string(account, "nickname", nickname);
+    }
+}
+
+static PurpleCmdRet toxprpl_myid_cmd_cb(PurpleConversation *conv,
+        const gchar *cmd, gchar **args, gchar **error, void *data)
+{
+    purple_debug_info("toxprpl", "/myid command detected\n");
+    PurpleConnection *gc = (PurpleConnection *)data;
+    toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
+
+    uint8_t bin_id[TOX_FRIEND_ADDRESS_SIZE];
+    tox_getaddress(plugin->tox, bin_id);
+    gchar *id = toxprpl_tox_friend_id_to_string(bin_id);
+
+    gchar *message = g_strdup_printf(_("If someone wants to add you, give them "
+                                       "this id: %s"), id);
+
+    purple_conversation_write(conv, NULL, message, PURPLE_MESSAGE_SYSTEM,
+                              time(NULL));
+    g_free(id);
+    g_free(message);
+    return PURPLE_CMD_RET_OK;
+}
+
+static PurpleCmdRet toxprpl_nick_cmd_cb(PurpleConversation *conv,
+        const gchar *cmd, gchar **args, gchar **error, void *data)
+{
+    purple_debug_info("toxprpl", "/nick %s command detected\n", args[0]);
+    PurpleConnection *gc = (PurpleConnection *)data;
+    toxprpl_set_nick_action(gc, args[0]);
+    return PURPLE_CMD_RET_OK;
+}
+
 static void toxprpl_login_after_setup(PurpleAccount *acct)
 {
     tox_IP_Port dht;
@@ -764,6 +807,18 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     purple_debug_info("toxprpl", "added connection timer as %d\n",
                       plugin->connection_timer);
 
+
+    gchar *myid_help = "myid  print your tox id which you can give to "
+                       "your friends";
+    gchar *nick_help = "nick &lt;nickname&gt; set your nickname";
+
+    plugin->myid_command_id = purple_cmd_register("myid", "",
+            PURPLE_CMD_P_DEFAULT, PURPLE_CMD_FLAG_IM | PURPLE_CMD_FLAG_CHAT,
+            TOXPRPL_ID, toxprpl_myid_cmd_cb, myid_help, gc);
+
+    plugin->nick_command_id = purple_cmd_register("nick", "s",
+            PURPLE_CMD_P_DEFAULT, PURPLE_CMD_FLAG_IM | PURPLE_CMD_FLAG_CHAT,
+            TOXPRPL_ID, toxprpl_nick_cmd_cb, nick_help, gc);
 
     purple_connection_set_protocol_data(gc, plugin);
 }
@@ -922,6 +977,9 @@ static void toxprpl_close(PurpleConnection *gc)
             plugin->tox_timer, plugin->connection_timer);
     purple_timeout_remove(plugin->tox_timer);
     purple_timeout_remove(plugin->connection_timer);
+
+    purple_cmd_unregister(plugin->myid_command_id);
+    purple_cmd_unregister(plugin->nick_command_id);
 
     uint32_t msg_size = tox_size(plugin->tox);
     if (msg_size > 0)
@@ -1164,18 +1222,6 @@ static void toxprpl_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
     {
         purple_debug_info("toxprpl", "removing tox friend #%d\n", buddy_data->tox_friendlist_number);
         tox_delfriend(plugin->tox, buddy_data->tox_friendlist_number);
-    }
-}
-
-static void toxprpl_set_nick_action(PurpleConnection *gc, const char *nickname)
-{
-    PurpleAccount *account = purple_connection_get_account(gc);
-    toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
-    if (nickname != NULL)
-    {
-        purple_connection_set_display_name(gc, nickname);
-        tox_setname(plugin->tox, (uint8_t *)nickname, strlen(nickname) + 1);
-        purple_account_set_string(account, "nickname", nickname);
     }
 }
 
