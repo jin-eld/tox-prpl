@@ -39,6 +39,14 @@
     #include <arpa/inet.h>
 #endif
 
+#ifndef O_BINARY
+    #ifdef _O_BINARY
+        #define O_BINARY _O_BINARY
+    #else
+        #define O_BINARY 0
+    #endif
+#endif
+
 #include <sys/stat.h>
 #include <fcntl.h>
 
@@ -791,7 +799,7 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename)
         return;
     }
 
-    int fd = open(filename, O_RDONLY);
+    int fd = open(filename, O_RDONLY | O_BINARY);
     if (fd == -1)
     {
         purple_notify_message(gc,
@@ -805,7 +813,6 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename)
     }
 
     guchar *account_data = g_malloc0(sb.st_size);
-
     size_t rb = read(fd, account_data, sb.st_size);
     if (rb != sb.st_size)
     {
@@ -1235,7 +1242,7 @@ static void toxprpl_user_export(PurpleConnection *gc, const char *filename)
         uint8_t *account_data = g_malloc0(msg_size);
         tox_save(plugin->tox, account_data);
 
-        int fd = open(filename, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+        int fd = open(filename, O_RDWR | O_CREAT | O_BINARY, S_IRUSR | S_IWUSR);
         if (fd == -1)
         {
             g_free(account_data);
