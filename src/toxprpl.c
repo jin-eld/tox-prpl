@@ -813,25 +813,26 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename)
     }
 
     guchar *account_data = g_malloc0(sb.st_size);
-    size_t rb = read(fd, account_data, sb.st_size);
-    if (rb != sb.st_size)
+    guchar *p = account_data;
+    size_t remaining = sb.st_size;
+    while (remaining > 0)
     {
-        const char *msg2 = _("short read");
+        ssize_t rb = read(fd, p, remaining);
         if (rb < 0)
         {
-            msg2 = strerror(errno);
-        }
-
-        purple_notify_message(gc,
+            purple_notify_message(gc,
                 PURPLE_NOTIFY_MSG_ERROR,
                 _("Error"),
                 _("Could not read account data file:"),
-                msg2,
+                strerror(errno),
                 (PurpleNotifyCloseCallback)toxprpl_login,
                 acct);
-        g_free(account_data);
-        close(fd);
-        return;
+            g_free(account_data);
+            close(fd);
+            return;
+        }
+        remaining = remaining - rb;
+        p = p + rb;
     }
 
     gchar *msg64 = g_base64_encode(account_data, sb.st_size);
@@ -1241,6 +1242,7 @@ static void toxprpl_user_export(PurpleConnection *gc, const char *filename)
     {
         uint8_t *account_data = g_malloc0(msg_size);
         tox_save(plugin->tox, account_data);
+        guchar *p = account_data;
 
         int fd = open(filename, O_RDWR | O_CREAT | O_BINARY, S_IRUSR | S_IWUSR);
         if (fd == -1)
@@ -1255,24 +1257,25 @@ static void toxprpl_user_export(PurpleConnection *gc, const char *filename)
             return;
         }
 
-        size_t wb = write(fd, account_data, msg_size);
-        if (wb != msg_size)
+        size_t remaining = (size_t)msg_size;
+        while (remaining > 0)
         {
-            const char *msg2 = NULL;
+            ssize_t wb = write(fd, p, remaining);
             if (wb < 0)
             {
-                msg2 = strerror(errno);
-            }
-            purple_notify_message(gc,
+                purple_notify_message(gc,
                     PURPLE_NOTIFY_MSG_ERROR,
                     _("Error"),
                     _("Could not save account data file:"),
-                    msg2,
+                    strerror(errno),
                     (PurpleNotifyCloseCallback)toxprpl_login,
                     account);
-            g_free(account_data);
-            close(fd);
-            return;
+                g_free(account_data);
+                close(fd);
+                return;
+            }
+            remaining = remaining - wb;
+            p = p + wb;
         }
 
         g_free(account_data);
