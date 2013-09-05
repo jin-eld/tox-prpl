@@ -716,6 +716,114 @@ static PurpleCmdRet toxprpl_nick_cmd_cb(PurpleConversation *conv,
     return PURPLE_CMD_RET_OK;
 }
 
+static void toxprpl_sync_add_buddy(PurpleAccount *account, Tox *tox,
+                                   int friend_number)
+{
+    uint8_t alias[TOX_MAX_NAME_LENGTH];
+    uint8_t client_id[TOX_CLIENT_ID_SIZE];
+    if (tox_getclient_id(tox, friend_number, client_id) < 0)
+    {
+        purple_debug_info("toxprpl", "Could not get id of friend #%d\n",
+                          friend_number);
+        return;
+    }
+
+    gchar *buddy_key = toxprpl_tox_bin_id_to_string(client_id);
+
+
+    PurpleBuddy *buddy;
+    if ((tox_getname(tox, friend_number, alias) == 0) &&
+        (strlen((const char *)alias) > 0))
+    {
+        purple_debug_info("toxprpl", "Got friend alias %s\n", alias);
+        buddy = purple_buddy_new(account, buddy_key, (const char*)alias);
+    }
+    else
+    {
+        purple_debug_info("toxprpl", "Adding [%s]\n", buddy_key);
+        buddy = purple_buddy_new(account, buddy_key, NULL);
+    }
+
+    toxprpl_buddy_data *buddy_data = g_new0(toxprpl_buddy_data, 1);
+    buddy_data->tox_friendlist_number = friend_number;
+    purple_buddy_set_protocol_data(buddy, buddy_data);
+    purple_blist_add_buddy(buddy, NULL, NULL, NULL);
+    TOX_USERSTATUS userstatus = tox_get_userstatus(tox, friend_number);
+    purple_debug_info("toxprpl", "Friend %s has status %d\n", buddy_key,
+                      userstatus);
+    purple_prpl_got_user_status(account, buddy_key,
+        toxprpl_statuses[
+            toxprpl_get_status_index(tox,friend_number,userstatus)].id,
+        NULL);
+    g_free(buddy_key);
+}
+
+static void toxprpl_sync_friends(PurpleAccount *acct, Tox *tox)
+{
+    uint32_t fl_len;
+    int *friendlist;
+    uint32_t i;
+
+    if (tox_get_friendlist(tox, &friendlist, &fl_len) == 0)
+    {
+        GSList *buddies = purple_find_buddies(acct, NULL);
+        GSList *iterator;
+        for (i = 0; i < fl_len; i++)
+        {
+            iterator = buddies;
+            int fnum = friendlist[i];
+            uint8_t bin_id[TOX_CLIENT_ID_SIZE];
+            if (tox_getclient_id(tox, fnum, bin_id) == 0)
+            {
+                gchar *str_id = toxprpl_tox_bin_id_to_string(bin_id);
+                while (iterator != NULL)
+                {
+                    PurpleBuddy *buddy = iterator->data;
+                    if (strcmp(buddy->name, str_id) == 0)
+                    {
+                        toxprpl_buddy_data *buddy_data =
+                                    g_new0(toxprpl_buddy_data, 1);
+                        buddy_data->tox_friendlist_number = fnum;
+                        purple_buddy_set_protocol_data(buddy, buddy_data);
+                        friendlist[i] = -1;
+                    }
+                    iterator = iterator->next;
+                }
+                g_free(str_id);
+            }
+        }
+
+        iterator = buddies;
+        // all left without buddy_data were not present in Tox and must be
+        // removed
+        while (iterator != NULL)
+        {
+            PurpleBuddy *buddy = iterator->data;
+            toxprpl_buddy_data *buddy_data =
+                purple_buddy_get_protocol_data(buddy);
+            if (buddy_data == NULL)
+            {
+                purple_blist_remove_buddy(buddy);
+            }
+            iterator = iterator->next;
+        }
+
+        g_slist_free(buddies);
+    }
+
+    // all left in friendlist that were not reset are not yet in blist
+    for (i = 0; i < fl_len; i++)
+    {
+        if (friendlist[i] != -1)
+        {
+            toxprpl_sync_add_buddy(acct, tox, friendlist[i]);
+        }
+    }
+
+    g_free(friendlist);
+}
+
+
 static void toxprpl_login_after_setup(PurpleAccount *acct)
 {
     tox_IP_Port dht;
@@ -794,6 +902,8 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     purple_debug_info("toxprpl", "Will connect to %s:%d (%s)\n" ,
                       ip, ntohs(dht.port), key);
 
+
+    toxprpl_sync_friends(acct, tox);
 
     toxprpl_plugin_data *plugin = g_new0(toxprpl_plugin_data, 1);
 
