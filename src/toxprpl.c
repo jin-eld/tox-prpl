@@ -313,7 +313,7 @@ static int toxprpl_get_status_index(Tox *tox, int fnum, TOX_USERSTATUS status)
         default:
             if (fnum != -1)
             {
-                if (tox_friendstatus(tox, fnum) == TOX_FRIEND_ONLINE)
+                if (tox_get_friend_connectionstatus(tox, fnum) == 1)
                 {
                     return TOXPRPL_STATUS_ONLINE;
                 }
@@ -766,6 +766,7 @@ static void toxprpl_sync_friends(PurpleAccount *acct, Tox *tox)
 
     if (tox_get_friendlist(tox, &friendlist, &fl_len) == 0)
     {
+        purple_debug_info("toxprpl", "got %u friends\n", fl_len);
         GSList *buddies = purple_find_buddies(acct, NULL);
         GSList *iterator;
         for (i = 0; i < fl_len; i++)
