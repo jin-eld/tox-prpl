@@ -163,80 +163,6 @@ static void toxprpl_query_buddy_info(gpointer data, gpointer user_data);
 
 // utilitis
 
-static uint32_t toxprpl_resolve_ip(PurpleConnection *gc, const char *address)
-{
-    struct addrinfo hints;
-    struct addrinfo *result = NULL;
-    struct addrinfo *rp = NULL;
-    int s, sfd;
-
-#ifdef __WIN32__
-    int res;
-    WSADATA wsa_data;
-
-    res = WSAStartup(MAKEWORD(2, 2), &wsa_data);
-    if (res != 0)
-    {
-        purple_notify_error(gc, _("Error"), _("Could not get IP:"),
-                            _("failed to initialize WinSock"));
-        return 0;
-    }
-#endif
-
-    memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_INET; // tox has no IPv6 support yet?
-    hints.ai_socktype = SOCK_DGRAM;
-    hints.ai_flags = AI_PASSIVE;
-    hints.ai_protocol = 0;
-    hints.ai_canonname = NULL;
-    hints.ai_addr = NULL;
-    hints.ai_next = NULL;
-
-    s = getaddrinfo(address, NULL, &hints, &result);
-    if (s != 0)
-    {
-        purple_notify_error(gc, _("Error"), _("Could not get IP:"),
-                            gai_strerror(s));
-#ifdef __WIN32__
-        WSACleanup();
-#endif
-        return 0;
-    }
-
-    for (rp = result; rp != NULL; rp = rp->ai_next)
-    {
-        sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-        if (sfd == -1)
-        {
-            continue;
-        }
-
-        if (connect(sfd, rp->ai_addr, rp->ai_addrlen) != -1)
-        {
-            close(sfd);
-            break;
-        }
-    }
-
-    if ((rp == NULL) || (rp->ai_family != AF_INET))
-    {
-        purple_notify_error(gc, _("Error"), _("Could not connect to:"),
-                            address);
-        freeaddrinfo(result);
-#ifdef __WIN32__
-        WSACleanup();
-#endif
-        return 0;
-    }
-
-    uint32_t addr = ((struct sockaddr_in *)rp->ai_addr)->sin_addr.s_addr;
-    freeaddrinfo(result);
-#ifdef __WIN32__
-    WSACleanup();
-#endif
-    return addr;
-}
-
 // returned buffer must be freed by the caller
 static char *toxprpl_data_to_hex_string(const unsigned char *data,
                                         const size_t len)
@@ -531,6 +457,7 @@ static gboolean tox_messenger_loop(gpointer data)
 static gboolean tox_connection_check(gpointer gc)
 {
     toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
+
     if ((plugin->connected == 0) && tox_isconnected(plugin->tox))
     {
         plugin->connected = 1;
@@ -827,24 +754,11 @@ static void toxprpl_sync_friends(PurpleAccount *acct, Tox *tox)
 
 static void toxprpl_login_after_setup(PurpleAccount *acct)
 {
-    tox_IP_Port dht;
-
     purple_debug_info("toxprpl", "logging in...\n");
 
     PurpleConnection *gc = purple_account_get_connection(acct);
 
-    const char* ip = purple_account_get_string(acct, "dht_server",
-                                               DEFAULT_SERVER_IP);
-    uint32_t resolved = toxprpl_resolve_ip(gc, ip);
-    if (resolved == 0)
-    {
-        purple_connection_error_reason(gc,
-                PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
-                _("server invalid or not found"));
-        return;
-    }
-
-    Tox *tox = tox_new();
+    Tox *tox = tox_new(0);
     if (tox == NULL)
     {
         purple_debug_info("toxprpl", "Fatal error, could not allocate memory "
@@ -893,16 +807,29 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     const char *key = purple_account_get_string(acct, "dht_server_key",
                                           DEFAULT_SERVER_KEY);
 
-    dht.port = htons(
-            purple_account_get_int(acct, "dht_server_port",
-                                   DEFAULT_SERVER_PORT));
-    dht.ip.i = resolved;
-    unsigned char *bin_str = toxprpl_hex_string_to_data(key);
-    tox_bootstrap(tox, dht, bin_str);
-    g_free(bin_str);
-    purple_debug_info("toxprpl", "Will connect to %s:%d (%s)\n" ,
-                      ip, ntohs(dht.port), key);
+    /// \todo add limits check to make sure the user did not enter something
+    /// invalid
+    uint16_t port = (uint16_t)purple_account_get_int(acct, "dht_server_port",
+                                   DEFAULT_SERVER_PORT);
 
+    const char* ip = purple_account_get_string(acct, "dht_server",
+                                               DEFAULT_SERVER_IP);
+
+    unsigned char *bin_str = toxprpl_hex_string_to_data(key);
+
+    purple_debug_info("toxprpl", "Will connect to %s:%d (%s)\n" ,
+                      ip, port, key);
+
+    if (tox_bootstrap_from_address(tox, ip, 0, htons(port), bin_str) == 0)
+    {
+        purple_connection_error_reason(gc,
+                PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
+                _("server invalid or not found"));
+        g_free(bin_str);
+        tox_kill(tox);
+        return;
+    }
+    g_free(bin_str);
 
     toxprpl_sync_friends(acct, tox);
 
