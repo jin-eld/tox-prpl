@@ -687,11 +687,13 @@ static void toxprpl_sync_add_buddy(PurpleAccount *account, Tox *tox,
 
 static void toxprpl_sync_friends(PurpleAccount *acct, Tox *tox)
 {
-    uint32_t fl_len;
-    int *friendlist;
     uint32_t i;
 
-    if (tox_get_friendlist(tox, &friendlist, &fl_len) == 0)
+    uint32_t fl_len = tox_count_friendlist(tox);
+    int *friendlist = g_malloc0(fl_len * sizeof(int));
+
+    fl_len = tox_copy_friendlist(tox, friendlist, fl_len);
+    if (fl_len != 0)
     {
         purple_debug_info("toxprpl", "got %u friends\n", fl_len);
         GSList *buddies = purple_find_buddies(acct, NULL);
