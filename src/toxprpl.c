@@ -128,7 +128,7 @@ static toxprpl_status toxprpl_statuses[] =
         "tox_online", _("Online")
     },
     {
-        PURPLE_STATUS_AWAY, TOXPRPL_STATUS_ONLINE,
+        PURPLE_STATUS_AWAY, TOXPRPL_STATUS_AWAY,
         "tox_away", _("Away")
     },
     {
