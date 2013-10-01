@@ -160,6 +160,7 @@ static void toxprpl_do_not_add_to_buddylist(toxprpl_accept_friend_data *data);
 
 static void toxprpl_login(PurpleAccount *acct);
 static void toxprpl_query_buddy_info(gpointer data, gpointer user_data);
+static void toxprpl_set_status(PurpleAccount *account, PurpleStatus *status);
 
 // utilitis
 
@@ -499,6 +500,13 @@ static gboolean tox_connection_check(gpointer gc)
             {
                 tox_setname(plugin->tox, (uint8_t *)nick, strlen(nick) + 1);
             }
+        }
+
+        PurpleStatus* status = purple_account_get_active_status(account);
+        if(status != NULL)
+        {
+            purple_debug_info("toxprpl", "(re)setting status\n");
+            toxprpl_set_status(account, status);
         }
     }
     else if ((plugin->connected == 1) && !tox_isconnected(plugin->tox))
