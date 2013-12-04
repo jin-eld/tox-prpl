@@ -539,7 +539,7 @@ static void toxprpl_set_status(PurpleAccount *account, PurpleStatus *status)
         return;
     }
 
-    tox_set_userstatus(plugin->tox, tox_status);
+    tox_set_user_status(plugin->tox, tox_status);
     if ((message != NULL) && (strlen(message) > 0))
     {
         tox_set_status_message(plugin->tox, (uint8_t *)message, strlen(message) + 1);
