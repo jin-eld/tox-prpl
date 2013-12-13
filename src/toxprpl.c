@@ -783,7 +783,7 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     tox_callback_user_status(tox, on_status_change, gc);
     tox_callback_friend_request(tox, on_request, gc);
     tox_callback_connection_status(tox, on_connectionstatus, gc);
-    tox_callback_action(tox, on_friend_action, gc);
+    tox_callback_friend_action(tox, on_friend_action, gc);
 
     purple_debug_info("toxprpl", "initialized tox callbacks\n");
 
