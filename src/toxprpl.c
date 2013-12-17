@@ -84,6 +84,21 @@
 #define DEFAULT_REQUEST_MESSAGE _("Please allow me to add you as a friend!")
 
 #define MAX_ACCOUNT_DATA_SIZE   1*1024*1024
+
+#define toxprpl_return_val_if_fail(expr,val)     \
+    if (!(expr))                                 \
+    {                                            \
+        purple_debug_info("tox-purple", #expr);  \
+        return (val);                            \
+    }
+
+#define toxprpl_return_if_fail(expr)             \
+    if (!(expr))                                 \
+    {                                            \
+        purple_debug_info("tox-purple", #expr);  \
+        return;                                  \
+    }
+
 static const char *g_HEX_CHARS = "0123456789abcdef";
 
 typedef struct
@@ -1446,6 +1461,33 @@ static gboolean toxprpl_offline_message(const PurpleBuddy *buddy)
     return FALSE;
 }
 
+static gboolean toxprpl_can_receive_file(PurpleConnection *gc, const char *who)
+{
+    purple_debug_info("toxprpl", "can_receive_file\n");
+
+    toxprpl_return_val_if_fail(gc != NULL, FALSE);
+    toxprpl_return_val_if_fail(who != NULL, FALSE);
+
+    toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
+    toxprpl_return_val_if_fail(plugin != NULL && plugin->tox != NULL, FALSE);
+
+    PurpleAccount *account = purple_connection_get_account(gc);
+    toxprpl_return_val_if_fail(account != NULL, FALSE);
+
+    PurpleBuddy *buddy = purple_find_buddy(account, who);
+    toxprpl_return_val_if_fail(buddy != NULL, FALSE);
+
+    toxprpl_buddy_data *buddy_data = purple_buddy_get_protocol_data(buddy);
+    toxprpl_return_val_if_fail(buddy_data != NULL, FALSE);
+
+    return tox_get_friend_connection_status(plugin->tox,
+        buddy_data->tox_friendlist_number) == 1;
+}
+static void toxprpl_send_file(PurpleConnection *gc, const char *who, const char *filename)
+{
+    //dummy
+}
+
 
 static PurplePluginProtocolInfo prpl_info =
 {
@@ -1504,8 +1546,8 @@ static PurplePluginProtocolInfo prpl_info =
     NULL,                               /* roomlist_get_list */
     NULL,                               /* roomlist_cancel */
     NULL,                               /* roomlist_expand_category */
-    NULL,                               /* can_receive_file */
-    NULL,                               /* send_file */
+    toxprpl_can_receive_file,           /* can_receive_file */
+    toxprpl_send_file,                  /* send_file */
     NULL,                               /* new_xfer */
     toxprpl_offline_message,            /* offline_message */
     NULL,                               /* whiteboard_prpl_ops */
