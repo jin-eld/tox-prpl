@@ -918,6 +918,22 @@ static void toxprpl_sync_friends(PurpleAccount *acct, Tox *tox)
     g_free(friendlist);
 }
 
+static gboolean toxprpl_save_account(PurpleAccount *account, Tox* tox)
+{
+    uint32_t msg_size = tox_size(tox);
+    if (msg_size > 0)
+    {
+        guchar *msg_data = g_malloc0(msg_size);
+        tox_save(tox, (uint8_t *)msg_data);
+        gchar *msg64 = g_base64_encode(msg_data, msg_size);
+        purple_account_set_string(account, "messenger", msg64);
+        g_free(msg64);
+        g_free(msg_data);
+        return TRUE;
+    }
+
+    return FALSE;
+}
 
 static void toxprpl_login_after_setup(PurpleAccount *acct)
 {
@@ -968,6 +984,10 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
             }
             g_free(msg_data);
         }
+    }
+    else // write account into pidgin
+    {
+        toxprpl_save_account(acct, tox);
     }
 
     purple_connection_update_progress(gc, _("Connecting"),
@@ -1189,17 +1209,7 @@ static void toxprpl_close(PurpleConnection *gc)
     purple_cmd_unregister(plugin->myid_command_id);
     purple_cmd_unregister(plugin->nick_command_id);
 
-    uint32_t msg_size = tox_size(plugin->tox);
-    if (msg_size > 0)
-    {
-        guchar *msg_data = g_malloc0(msg_size);
-        tox_save(plugin->tox, (uint8_t *)msg_data);
-        gchar *msg64 = g_base64_encode(msg_data, msg_size);
-        purple_account_set_string(account, "messenger", msg64);
-        g_free(msg64);
-        g_free(msg_data);
-    }
-    else
+    if (!toxprpl_save_account(account, plugin->tox))
     {
         purple_account_set_string(account, "messenger", "");
     }
@@ -1329,6 +1339,10 @@ static int toxprpl_tox_add_friend(Tox *tox, PurpleConnection *gc,
     else
     {
         purple_debug_info("toxprpl", "Friend %s added as %d\n", buddy_key, ret);
+        // save account so buddy is not lost in case pidgin does not exit
+        // cleanly
+        PurpleAccount *account = purple_connection_get_account(gc);
+        toxprpl_save_account(account, tox);
     }
 
     return ret;
@@ -1411,6 +1425,10 @@ static void toxprpl_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
         return;
     }
 
+    // save account so buddy is not lost in case pidgin does not exit cleanly
+    PurpleAccount *account = purple_connection_get_account(gc);
+    toxprpl_save_account(account, plugin->tox);
+
     gchar *cut = g_ascii_strdown(buddy->name, TOX_CLIENT_ID_SIZE * 2 + 1);
     cut[TOX_CLIENT_ID_SIZE * 2] = '\0';
     purple_debug_info("toxprpl", "converted %s to %s\n", buddy->name, cut);
@@ -1430,6 +1448,11 @@ static void toxprpl_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
     {
         purple_debug_info("toxprpl", "removing tox friend #%d\n", buddy_data->tox_friendlist_number);
         tox_del_friend(plugin->tox, buddy_data->tox_friendlist_number);
+
+        // save account to make sure buddy stays deleted in case pidgin does
+        // not exit cleanly
+        PurpleAccount *account = purple_connection_get_account(gc);
+        toxprpl_save_account(account, plugin->tox);
     }
 }
 
