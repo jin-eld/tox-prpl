@@ -1710,7 +1710,6 @@ static void toxprpl_xfer_start(PurpleXfer *xfer)
 
         toxprpl_return_if_fail(buffer != NULL);
         size_t read_bytes = fread(buffer, sizeof(uint8_t), bytes_remaining, xfer->dest_fp);
-        purple_debug_info("toxprpl", "read_bytes: %zu\n", read_bytes);
         if (read_bytes != bytes_remaining)
         {
             purple_debug_warning("toxprpl", "read_bytes != bytes_remaining\n");
