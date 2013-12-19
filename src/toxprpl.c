@@ -85,6 +85,8 @@
 
 #define MAX_ACCOUNT_DATA_SIZE   1*1024*1024
 
+#define DEFAULT_NICKNAME    "ToxedPidgin"
+
 #define toxprpl_return_val_if_fail(expr,val)     \
     if (!(expr))                                 \
     {                                            \
@@ -610,6 +612,18 @@ static gboolean tox_messenger_loop(gpointer data)
     return TRUE;
 }
 
+static void toxprpl_set_nick_action(PurpleConnection *gc, const char *nickname)
+{
+    PurpleAccount *account = purple_connection_get_account(gc);
+    toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
+    if (nickname != NULL)
+    {
+        purple_connection_set_display_name(gc, nickname);
+        tox_set_name(plugin->tox, (uint8_t *)nickname, strlen(nickname) + 1);
+        purple_account_set_string(account, "nickname", nickname);
+    }
+}
+
 static gboolean tox_connection_check(gpointer gc)
 {
     toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
@@ -639,7 +653,7 @@ static gboolean tox_connection_check(gpointer gc)
         }
 
         const char *nick = purple_account_get_string(account, "nickname", NULL);
-        if (nick == NULL)
+        if (strlen(nick) == 0)
         {
             if (strlen((const char *)our_name) > 0)
             {
@@ -650,11 +664,7 @@ static gboolean tox_connection_check(gpointer gc)
         }
         else
         {
-            purple_connection_set_display_name(gc, nick);
-            if (strcmp(nick, (const char *)our_name) != 0)
-            {
-                tox_set_name(plugin->tox, (uint8_t *)nick, strlen(nick) + 1);
-            }
+            toxprpl_set_nick_action(gc, nick);
         }
 
         PurpleStatus* status = purple_account_get_active_status(account);
@@ -762,18 +772,6 @@ static GList *toxprpl_status_types(PurpleAccount *acct)
     }
 
     return types;
-}
-
-static void toxprpl_set_nick_action(PurpleConnection *gc, const char *nickname)
-{
-    PurpleAccount *account = purple_connection_get_account(gc);
-    toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
-    if (nickname != NULL)
-    {
-        purple_connection_set_display_name(gc, nickname);
-        tox_set_name(plugin->tox, (uint8_t *)nickname, strlen(nickname) + 1);
-        purple_account_set_string(account, "nickname", nickname);
-    }
 }
 
 static PurpleCmdRet toxprpl_myid_cmd_cb(PurpleConversation *conv,
@@ -958,8 +956,6 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     tox_callback_file_send_request(tox, on_file_send_request, gc);
     tox_callback_file_control(tox, on_file_control, gc);
     tox_callback_file_data(tox, on_file_data, gc);
-
-
     purple_debug_info("toxprpl", "initialized tox callbacks\n");
 
     gc->flags |= PURPLE_CONNECTION_NO_FONTSIZE | PURPLE_CONNECTION_NO_URLDESC;
@@ -1046,7 +1042,23 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
             PURPLE_CMD_P_DEFAULT, PURPLE_CMD_FLAG_IM | PURPLE_CMD_FLAG_CHAT,
             TOXPRPL_ID, toxprpl_nick_cmd_cb, nick_help, gc);
 
+    const char *nick = purple_account_get_string(acct, "nickname", NULL);
+    if (strlen(nick) == 0)
+    {
+        nick = purple_account_get_username(acct);
+        if (strlen(nick) == 0)
+        {
+            nick = purple_account_get_alias(acct);
+        }
+
+        if (strlen(nick) == 0)
+        {
+            nick = DEFAULT_NICKNAME;
+        }
+    }
+
     purple_connection_set_protocol_data(gc, plugin);
+    toxprpl_set_nick_action(gc, nick);
 }
 
 static void toxprpl_user_import(PurpleAccount *acct, const char *filename)
