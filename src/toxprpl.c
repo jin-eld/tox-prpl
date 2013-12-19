@@ -88,14 +88,12 @@
 #define toxprpl_return_val_if_fail(expr,val)     \
     if (!(expr))                                 \
     {                                            \
-        purple_debug_info("tox-purple", #expr);  \
         return (val);                            \
     }
 
 #define toxprpl_return_if_fail(expr)             \
     if (!(expr))                                 \
     {                                            \
-        purple_debug_info("tox-purple", #expr);  \
         return;                                  \
     }
 
