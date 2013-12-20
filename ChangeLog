@@ -1,5 +1,11 @@
 Tox Protocol Plugin For Pidgin / libpurple
 
+v0.3.0	20.12.2013
+	* added support for file transfer, #21 / contribution by naxuroqa
+	* fixed setting of username as tox nickname upon creation of new accounts
+	* made sure account settings are not lost if Pidgin is not shut down
+	  cleanly
+
 v0.2.0	05.09.2013
 	* fixed importing of saved accounts unter Win32, #8
 	* sync Tox friend list with libpurple buddy list after account import, #9
