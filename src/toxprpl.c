@@ -1043,7 +1043,7 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
             TOXPRPL_ID, toxprpl_nick_cmd_cb, nick_help, gc);
 
     const char *nick = purple_account_get_string(acct, "nickname", NULL);
-    if (strlen(nick) == 0)
+    if (!nick || (strlen(nick) == 0))
     {
         nick = purple_account_get_username(acct);
         if (strlen(nick) == 0)
