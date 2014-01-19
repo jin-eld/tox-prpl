@@ -48,3 +48,8 @@ missing
 depcomp
 ltmain.sh
 
+ar-lib
+
+INSTALL
+
+tox-prpl-*.tar.gz
