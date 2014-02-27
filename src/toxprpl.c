@@ -601,6 +601,45 @@ static void on_file_data(Tox *tox, int friendnumber, uint8_t filenumber,
     }
 }
 
+static void on_typing_change(Tox *tox, int friendnum, int is_typing,
+                            void *userdata)
+{
+    purple_debug_info("toxprpl", "Friend typing status change: %d", friendnum);
+    
+    PurpleConnection *gc = userdata;
+    toxprpl_return_if_fail(gc != NULL);
+
+    uint8_t client_id[TOX_CLIENT_ID_SIZE];
+    if (tox_get_client_id(tox, friendnum, client_id) < 0)
+    {
+        purple_debug_info("toxprpl", "Could not get id of friend %d\n",
+                          friendnum);
+        return;
+    }
+
+    gchar *buddy_key = toxprpl_tox_bin_id_to_string(client_id);
+    PurpleAccount *account = purple_connection_get_account(gc);
+    PurpleBuddy *buddy = purple_find_buddy(account, buddy_key);
+    if (buddy == NULL)
+    {
+        purple_debug_info("toxprpl", "Ignoring typing change because buddy %s was not found\n", buddy_key);
+        g_free(buddy_key);
+        return;
+    }
+
+    g_free(buddy_key);
+    
+    if (is_typing)
+    {
+        serv_got_typing(gc, buddy->name, 5, PURPLE_TYPING);
+                                    /*   ^ timeout for typing status (0 = disabled) */
+    }
+    else
+    {
+        serv_got_typing_stopped(gc, buddy->name);
+    }
+}
+
 static gboolean tox_messenger_loop(gpointer data)
 {
     PurpleConnection *gc = (PurpleConnection *)data;
@@ -956,6 +995,8 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     tox_callback_file_send_request(tox, on_file_send_request, gc);
     tox_callback_file_control(tox, on_file_control, gc);
     tox_callback_file_data(tox, on_file_data, gc);
+    
+    tox_callback_typing_change(tox, on_typing_change, gc);
     purple_debug_info("toxprpl", "initialized tox callbacks\n");
 
     gc->flags |= PURPLE_CONNECTION_NO_FONTSIZE | PURPLE_CONNECTION_NO_URLDESC;
