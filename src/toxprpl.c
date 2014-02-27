@@ -1984,6 +1984,47 @@ static void toxprpl_send_file(PurpleConnection *gc, const char *who, const char 
     }
 }
 
+static unsigned int toxprpl_send_typing(PurpleConnection *gc, const char *who,
+    PurpleTypingState state)
+{
+    purple_debug_info("toxprpl", "send_typing\n");
+    
+    toxprpl_return_val_if_fail(gc != NULL, 0);
+    toxprpl_return_val_if_fail(who != NULL, 0);
+    
+    toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
+    toxprpl_return_val_if_fail(plugin != NULL && plugin->tox != NULL, 0);
+
+    PurpleAccount *account = purple_connection_get_account(gc);
+    toxprpl_return_val_if_fail(account != NULL, 0);
+
+    PurpleBuddy *buddy = purple_find_buddy(account, who);
+    toxprpl_return_val_if_fail(buddy != NULL, 0);
+
+    toxprpl_buddy_data *buddy_data = purple_buddy_get_protocol_data(buddy);
+    toxprpl_return_val_if_fail(buddy_data != NULL, 0);
+
+    switch(state)
+    {
+        case PURPLE_TYPING:
+            purple_debug_info("toxprpl", "Send typing state: TYPING\n");
+            tox_set_user_is_typing(plugin->tox, buddy_data->tox_friendlist_number, TRUE);
+            break;
+
+        case PURPLE_TYPED:
+            purple_debug_info("toxprpl", "Send typing state: TYPED\n"); /* typing pause */
+            tox_set_user_is_typing(plugin->tox, buddy_data->tox_friendlist_number, FALSE);
+            break;
+        
+        default:
+            purple_debug_info("toxprpl", "Send typing state: NOT_TYPING\n");
+            tox_set_user_is_typing(plugin->tox, buddy_data->tox_friendlist_number, FALSE);
+            break;
+    }
+    
+    return 0;
+}
+
 static PurplePluginProtocolInfo prpl_info =
 {
     OPT_PROTO_NO_PASSWORD | OPT_PROTO_REGISTER_NOSCREENNAME | OPT_PROTO_INVITE_MESSAGE,  /* options */
@@ -2002,7 +2043,7 @@ static PurplePluginProtocolInfo prpl_info =
     toxprpl_close,                      /* close */
     toxprpl_send_im,                    /* send_im */
     NULL,                               /* set_info */
-    NULL,                               /* send_typing */
+    toxprpl_send_typing,                /* send_typing */
     NULL,                               /* get_info */
     toxprpl_set_status,                 /* set_status */
     NULL,                               /* set_idle */
