@@ -601,6 +601,45 @@ static void on_file_data(Tox *tox, int friendnumber, uint8_t filenumber,
     }
 }
 
+static void on_typing_change(Tox *tox, int friendnum, int is_typing,
+                            void *userdata)
+{
+    purple_debug_info("toxprpl", "Friend typing status change: %d", friendnum);
+    
+    PurpleConnection *gc = userdata;
+    toxprpl_return_if_fail(gc != NULL);
+
+    uint8_t client_id[TOX_CLIENT_ID_SIZE];
+    if (tox_get_client_id(tox, friendnum, client_id) < 0)
+    {
+        purple_debug_info("toxprpl", "Could not get id of friend %d\n",
+                          friendnum);
+        return;
+    }
+
+    gchar *buddy_key = toxprpl_tox_bin_id_to_string(client_id);
+    PurpleAccount *account = purple_connection_get_account(gc);
+    PurpleBuddy *buddy = purple_find_buddy(account, buddy_key);
+    if (buddy == NULL)
+    {
+        purple_debug_info("toxprpl", "Ignoring typing change because buddy %s was not found\n", buddy_key);
+        g_free(buddy_key);
+        return;
+    }
+
+    g_free(buddy_key);
+    
+    if (is_typing)
+    {
+        serv_got_typing(gc, buddy->name, 5, PURPLE_TYPING);
+                                    /*   ^ timeout for typing status (0 = disabled) */
+    }
+    else
+    {
+        serv_got_typing_stopped(gc, buddy->name);
+    }
+}
+
 static gboolean tox_messenger_loop(gpointer data)
 {
     PurpleConnection *gc = (PurpleConnection *)data;
@@ -956,6 +995,8 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     tox_callback_file_send_request(tox, on_file_send_request, gc);
     tox_callback_file_control(tox, on_file_control, gc);
     tox_callback_file_data(tox, on_file_data, gc);
+    
+    tox_callback_typing_change(tox, on_typing_change, gc);
     purple_debug_info("toxprpl", "initialized tox callbacks\n");
 
     gc->flags |= PURPLE_CONNECTION_NO_FONTSIZE | PURPLE_CONNECTION_NO_URLDESC;
@@ -1984,6 +2025,47 @@ static void toxprpl_send_file(PurpleConnection *gc, const char *who, const char 
     }
 }
 
+static unsigned int toxprpl_send_typing(PurpleConnection *gc, const char *who,
+    PurpleTypingState state)
+{
+    purple_debug_info("toxprpl", "send_typing\n");
+    
+    toxprpl_return_val_if_fail(gc != NULL, 0);
+    toxprpl_return_val_if_fail(who != NULL, 0);
+    
+    toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
+    toxprpl_return_val_if_fail(plugin != NULL && plugin->tox != NULL, 0);
+
+    PurpleAccount *account = purple_connection_get_account(gc);
+    toxprpl_return_val_if_fail(account != NULL, 0);
+
+    PurpleBuddy *buddy = purple_find_buddy(account, who);
+    toxprpl_return_val_if_fail(buddy != NULL, 0);
+
+    toxprpl_buddy_data *buddy_data = purple_buddy_get_protocol_data(buddy);
+    toxprpl_return_val_if_fail(buddy_data != NULL, 0);
+
+    switch(state)
+    {
+        case PURPLE_TYPING:
+            purple_debug_info("toxprpl", "Send typing state: TYPING\n");
+            tox_set_user_is_typing(plugin->tox, buddy_data->tox_friendlist_number, TRUE);
+            break;
+
+        case PURPLE_TYPED:
+            purple_debug_info("toxprpl", "Send typing state: TYPED\n"); /* typing pause */
+            tox_set_user_is_typing(plugin->tox, buddy_data->tox_friendlist_number, FALSE);
+            break;
+        
+        default:
+            purple_debug_info("toxprpl", "Send typing state: NOT_TYPING\n");
+            tox_set_user_is_typing(plugin->tox, buddy_data->tox_friendlist_number, FALSE);
+            break;
+    }
+    
+    return 0;
+}
+
 static PurplePluginProtocolInfo prpl_info =
 {
     OPT_PROTO_NO_PASSWORD | OPT_PROTO_REGISTER_NOSCREENNAME | OPT_PROTO_INVITE_MESSAGE,  /* options */
@@ -2002,7 +2084,7 @@ static PurplePluginProtocolInfo prpl_info =
     toxprpl_close,                      /* close */
     toxprpl_send_im,                    /* send_im */
     NULL,                               /* set_info */
-    NULL,                               /* send_typing */
+    toxprpl_send_typing,                /* send_typing */
     NULL,                               /* get_info */
     toxprpl_set_status,                 /* set_status */
     NULL,                               /* set_idle */
