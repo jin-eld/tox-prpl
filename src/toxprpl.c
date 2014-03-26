@@ -334,7 +334,7 @@ static void on_connectionstatus(Tox *tox, int fnum, uint8_t status,
     g_free(buddy_key);
 }
 
-static void on_request(uint8_t* public_key, uint8_t* data,
+static void on_request(struct Tox *tox, uint8_t* public_key, uint8_t* data,
                        uint16_t length, void *user_data)
 {
     purple_debug_info("toxprpl", "incoming friend request!\n");
@@ -452,7 +452,7 @@ static void on_nick_change(Tox *tox, int friendnum, uint8_t* data,
     purple_blist_alias_buddy(buddy, (const char *)data);
 }
 
-static void on_status_change(Tox *tox, int friendnum, TOX_USERSTATUS userstatus,
+static void on_status_change(struct Tox *tox, int32_t friendnum, uint8_t userstatus,
                              void *user_data)
 {
     purple_debug_info("toxprpl", "Status change: %d\n", userstatus);
@@ -601,7 +601,7 @@ static void on_file_data(Tox *tox, int friendnumber, uint8_t filenumber,
     }
 }
 
-static void on_typing_change(Tox *tox, int friendnum, int is_typing,
+static void on_typing_change(Tox *tox, int32_t friendnum, uint8_t is_typing,
                             void *userdata)
 {
     purple_debug_info("toxprpl", "Friend typing status change: %d", friendnum);
@@ -683,8 +683,7 @@ static gboolean tox_connection_check(gpointer gc)
         g_slist_free(buddy_list);
 
         uint8_t our_name[TOX_MAX_NAME_LENGTH];
-        uint16_t name_len = tox_get_self_name(plugin->tox, our_name,
-                                             TOX_MAX_NAME_LENGTH);
+        uint16_t name_len = tox_get_self_name(plugin->tox, our_name);
         // bug in the library?
         if (name_len == 0)
         {
@@ -762,7 +761,7 @@ static void toxprpl_query_buddy_info(gpointer data, gpointer user_data)
     if (buddy_data == NULL)
     {
         unsigned char *bin_key = toxprpl_hex_string_to_data(buddy->name);
-        int fnum = tox_get_friend_id(plugin->tox, bin_key);
+        int fnum = tox_get_friend_number(plugin->tox, bin_key);
         buddy_data = g_new0(toxprpl_buddy_data, 1);
         buddy_data->tox_friendlist_number = fnum;
         purple_buddy_set_protocol_data(buddy, buddy_data);
