@@ -1,5 +1,10 @@
 Tox Protocol Plugin For Pidgin / libpurple
 
+v0.4.0	21.04.2014
+	* fixed crash on new account creation
+	* added typing status support, #23
+	* sync with latest tox core API
+
 v0.3.0	20.12.2013
 	* added support for file transfer, #21 / contribution by naxuroqa
 	* fixed setting of username as tox nickname upon creation of new accounts
