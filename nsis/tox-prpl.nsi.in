@@ -154,6 +154,7 @@ Section "tox-prpl"
 
         File "/oname=plugins\libtox.dll" @DEPS_PATH@@OS_PATH_SEPARATOR@lib@OS_PATH_SEPARATOR@purple-2@OS_PATH_SEPARATOR@libtox.dll
         File "/oname=libtoxcore-0.dll" @DEPS_PATH@@OS_PATH_SEPARATOR@bin@OS_PATH_SEPARATOR@libtoxcore-0.dll
+        File "/oname=libtoxdns-0.dll" @DEPS_PATH@@OS_PATH_SEPARATOR@bin@OS_PATH_SEPARATOR@libtoxdns-0.dll
         File "/oname=libsodium-4.dll" @DEPS_PATH@@OS_PATH_SEPARATOR@bin@OS_PATH_SEPARATOR@libsodium-4.dll
 
         File "/oname=pixmaps\pidgin\protocols\16\tox.png" @top_srcdir@@OS_PATH_SEPARATOR@pixmaps@OS_PATH_SEPARATOR@protocols@OS_PATH_SEPARATOR@16@OS_PATH_SEPARATOR@tox.png
@@ -177,6 +178,7 @@ Section "Uninstall"
     Delete "$INSTDIR\plugins\libtox.dll"
 
     Delete "$INSTDIR\libtoxcore-0.dll"
+    Delete "$INSTDIR\libtoxdns-0.dll"
     Delete "$INSTDIR\libsodium-4.dll"
 
     Delete "$INSTDIR\pixmaps\pidgin\protocols\16\tox.png"
