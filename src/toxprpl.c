@@ -614,7 +614,7 @@ static void on_typing_change(Tox *tox, int32_t friendnum, uint8_t is_typing,
                             void *userdata)
 {
     purple_debug_info("toxprpl", "Friend typing status change: %d", friendnum);
-    
+
     PurpleConnection *gc = userdata;
     toxprpl_return_if_fail(gc != NULL);
 
@@ -637,7 +637,7 @@ static void on_typing_change(Tox *tox, int32_t friendnum, uint8_t is_typing,
     }
 
     g_free(buddy_key);
-    
+
     if (is_typing)
     {
         serv_got_typing(gc, buddy->name, 5, PURPLE_TYPING);
@@ -1006,7 +1006,7 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     tox_callback_file_send_request(tox, on_file_send_request, gc);
     tox_callback_file_control(tox, on_file_control, gc);
     tox_callback_file_data(tox, on_file_data, gc);
-    
+
     tox_callback_typing_change(tox, on_typing_change, gc);
     purple_debug_info("toxprpl", "initialized tox callbacks\n");
 
@@ -2042,10 +2042,10 @@ static unsigned int toxprpl_send_typing(PurpleConnection *gc, const char *who,
     PurpleTypingState state)
 {
     purple_debug_info("toxprpl", "send_typing\n");
-    
+
     toxprpl_return_val_if_fail(gc != NULL, 0);
     toxprpl_return_val_if_fail(who != NULL, 0);
-    
+
     toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
     toxprpl_return_val_if_fail(plugin != NULL && plugin->tox != NULL, 0);
 
@@ -2069,13 +2069,13 @@ static unsigned int toxprpl_send_typing(PurpleConnection *gc, const char *who,
             purple_debug_info("toxprpl", "Send typing state: TYPED\n"); /* typing pause */
             tox_set_user_is_typing(plugin->tox, buddy_data->tox_friendlist_number, FALSE);
             break;
-        
+
         default:
             purple_debug_info("toxprpl", "Send typing state: NOT_TYPING\n");
             tox_set_user_is_typing(plugin->tox, buddy_data->tox_friendlist_number, FALSE);
             break;
     }
-    
+
     return 0;
 }
 
