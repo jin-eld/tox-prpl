@@ -1,5 +1,8 @@
 Tox Protocol Plugin For Pidgin / libpurple
 
+v0.4.1	13.07.2014
+	* synted with latest tox core API
+
 v0.4.0	21.04.2014
 	* fixed crash on new account creation
 	* added typing status support, #23
