@@ -297,7 +297,7 @@ static TOX_USERSTATUS toxprpl_get_tox_status_from_id(const char *status_id)
 }
 
 /* tox helpers */
-static gchar *toxprpl_tox_bin_id_to_string(uint8_t *bin_id)
+static gchar *toxprpl_tox_bin_id_to_string(const uint8_t *bin_id)
 {
     return toxprpl_data_to_hex_string(bin_id, TOX_CLIENT_ID_SIZE);
 }
@@ -308,7 +308,7 @@ static gchar *toxprpl_tox_friend_id_to_string(uint8_t *bin_id)
 }
 
 /* tox specific stuff */
-static void on_connectionstatus(Tox *tox, int fnum, uint8_t status,
+static void on_connectionstatus(Tox *tox, int32_t fnum, uint8_t status,
                                 void *user_data)
 {
     PurpleConnection *gc = (PurpleConnection *)user_data;
@@ -334,8 +334,8 @@ static void on_connectionstatus(Tox *tox, int fnum, uint8_t status,
     g_free(buddy_key);
 }
 
-static void on_request(struct Tox *tox, uint8_t* public_key, uint8_t* data,
-                       uint16_t length, void *user_data)
+static void on_request(struct Tox *tox, const uint8_t *public_key,
+                       const uint8_t *data, uint16_t length, void *user_data)
 {
     purple_debug_info("toxprpl", "incoming friend request!\n");
     gchar *dialog_message;
@@ -380,7 +380,7 @@ static void on_request(struct Tox *tox, uint8_t* public_key, uint8_t* data,
     g_free(request_msg);
 }
 
-static void on_friend_action(Tox *tox, int friendnum, uint8_t* string,
+static void on_friend_action(Tox *tox, int32_t friendnum, const uint8_t *string,
                              uint16_t length, void *user_data)
 {
     purple_debug_info("toxprpl", "action received\n");
@@ -405,7 +405,8 @@ static void on_friend_action(Tox *tox, int friendnum, uint8_t* string,
     g_free(message);
 }
 
-static void on_incoming_message(Tox *tox, int friendnum, uint8_t* string,
+static void on_incoming_message(Tox *tox, int32_t friendnum,
+                                const uint8_t *string,
                                 uint16_t length, void *user_data)
 {
     purple_debug_info("toxprpl", "Message received!\n");
@@ -427,7 +428,7 @@ static void on_incoming_message(Tox *tox, int friendnum, uint8_t* string,
     g_free(safemsg);
 }
 
-static void on_nick_change(Tox *tox, int friendnum, uint8_t* data,
+static void on_nick_change(Tox *tox, int32_t friendnum, const uint8_t *data,
                            uint16_t length, void *user_data)
 {
     purple_debug_info("toxprpl", "Nick change!\n");
@@ -507,9 +508,10 @@ static PurpleXfer *toxprpl_find_xfer(PurpleConnection *gc, int friendnumber, uin
     return NULL;
 }
 
-static void on_file_control(Tox *tox, int friendnumber, uint8_t receive_send,
-                            uint8_t filenumber, uint8_t control_type,
-                            uint8_t *data, uint16_t length, void *userdata)
+static void on_file_control(Tox *tox, int32_t friendnumber,
+                            uint8_t receive_send, uint8_t filenumber,
+                            uint8_t control_type, const uint8_t *data,
+                            uint16_t length, void *userdata)
 {
     purple_debug_info("toxprpl", "file control: %i (%s) %i\n", friendnumber,
         receive_send == 0 ? "rx" : "tx", filenumber);
@@ -546,8 +548,9 @@ static void on_file_control(Tox *tox, int friendnumber, uint8_t receive_send,
     }
 }
 
-static void on_file_send_request(Tox *tox, int friendnumber, uint8_t filenumber,
-                                 uint64_t filesize, uint8_t *filename,
+static void on_file_send_request(Tox *tox, int32_t friendnumber,
+                                 uint8_t filenumber,
+                                 uint64_t filesize, const uint8_t *filename,
                                  uint16_t filename_length, void *userdata)
 {
     purple_debug_info("toxprpl", "file_send_request: %i %i\n", friendnumber,
@@ -580,8 +583,8 @@ static void on_file_send_request(Tox *tox, int friendnumber, uint8_t filenumber,
     g_free(buddy_key);
 }
 
-static void on_file_data(Tox *tox, int friendnumber, uint8_t filenumber,
-                         uint8_t *data, uint16_t length, void *userdata)
+static void on_file_data(Tox *tox, int32_t friendnumber, uint8_t filenumber,
+                         const uint8_t *data, uint16_t length, void *userdata)
 {
     PurpleConnection *gc = userdata;
 
