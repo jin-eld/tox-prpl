@@ -1,5 +1,9 @@
 Tox Protocol Plugin For Pidgin / libpurple
 
+v0.4.2	29.09.2014
+	* synted with latest tox core API
+	* fixed NSIS installer script
+
 v0.4.1	13.07.2014
 	* synted with latest tox core API
 
