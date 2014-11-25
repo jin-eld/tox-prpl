@@ -1320,7 +1320,7 @@ static int toxprpl_send_im(PurpleConnection *gc, const char *who,
     if (purple_message_meify(no_html, -1))
     {
         if (tox_send_action(plugin->tox, buddy_data->tox_friendlist_number,
-                                    (uint8_t *)no_html, strlen(message)+1) == 1)
+                                    (uint8_t *)no_html, strlen(message)+1) != 0)
         {
             message_sent = 1;
         }
