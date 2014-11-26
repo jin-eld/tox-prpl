@@ -356,7 +356,7 @@ static void on_request(struct Tox *tox, const uint8_t *public_key,
     }
 
     dialog_message = g_strdup_printf("The user %s has sent you a friend "
-                                    "request, do you want to add him?",
+                                    "request, do you want to add them?",
                                     buddy_key);
 
     gchar *request_msg = NULL;
