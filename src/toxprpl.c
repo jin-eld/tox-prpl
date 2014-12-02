@@ -1215,7 +1215,7 @@ static void toxprpl_login(PurpleAccount *acct)
         purple_request_action(gc,
             _("Setup Tox account"),
             _("This appears to be your first login to the Tox network, "
-              "would you like to start with a new user ID or would you "
+              "would you like to start with a new Tox user ID or would you "
               "like to import an existing one?"),
             _("Note: you can export / backup your account via the account "
               "actions menu."),
@@ -1472,7 +1472,7 @@ static void toxprpl_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
     if (strlen(buddy->name) != (TOX_FRIEND_ADDRESS_SIZE * 2))
     {
         purple_notify_error(gc, _("Error"),
-                            _("Invalid buddy ID given (must be 76 characters "
+                            _("Invalid Tox ID given (must be 76 characters "
                               "long)"), NULL);
         purple_blist_remove_buddy(buddy);
         return;
@@ -1538,7 +1538,7 @@ static void toxprpl_action_show_id_dialog(PurplePluginAction *action)
     purple_notify_message(gc,
             PURPLE_NOTIFY_MSG_INFO,
             _("Account ID"),
-            _("If someone wants to add you, give them this ID:"),
+            _("If someone wants to add you, give them this Tox ID:"),
             id,
             (PurpleNotifyCloseCallback)toxprpl_show_id_dialog_closed,
             id);
