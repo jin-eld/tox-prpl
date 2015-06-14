@@ -144,6 +144,7 @@ typedef struct
     int friendnumber;
     uint8_t filenumber;
     toxprpl_idle_write_data *idle_write_data;
+    uint8_t *file_id;
 } toxprpl_xfer_data;
 
 #define TOXPRPL_MAX_STATUS          4
@@ -261,20 +262,20 @@ unsigned char *toxprpl_hex_string_to_data(const char *s)
 }
 
 // stay independent from the lib
-static int toxprpl_get_status_index(Tox *tox, int fnum, TOX_USERSTATUS status)
+static int toxprpl_get_status_index(Tox *tox, int fnum, TOX_USER_STATUS status)
 {
     switch (status)
     {
-        case TOX_USERSTATUS_AWAY:
+        case TOX_USER_STATUS_AWAY:
             return TOXPRPL_STATUS_AWAY;
-        case TOX_USERSTATUS_BUSY:
+        case TOX_USER_STATUS_BUSY:
             return TOXPRPL_STATUS_BUSY;
-        case TOX_USERSTATUS_NONE:
-        case TOX_USERSTATUS_INVALID:
+        case TOX_USER_STATUS_NONE:
         default:
             if (fnum != -1)
             {
-                if (tox_get_friend_connection_status(tox, fnum) == 1)
+                TOX_ERR_FRIEND_QUERY err_bak;
+                if (tox_friend_get_connection_status(tox, fnum, &err_bak) != TOX_CONNECTION_NONE)
                 {
                     return TOXPRPL_STATUS_ONLINE;
                 }
@@ -283,51 +284,54 @@ static int toxprpl_get_status_index(Tox *tox, int fnum, TOX_USERSTATUS status)
     return TOXPRPL_STATUS_OFFLINE;
 }
 
-static TOX_USERSTATUS toxprpl_get_tox_status_from_id(const char *status_id)
+static bool toxprpl_get_tox_status_from_id(const char *status_id, TOX_USER_STATUS *status_out)
 {
     int i;
     for (i = 0; i < TOXPRPL_MAX_STATUS; i++)
     {
         if (strcmp(toxprpl_statuses[i].id, status_id) == 0)
         {
-            return toxprpl_statuses[i].tox_status;
+            *status_out = toxprpl_statuses[i].tox_status;
+            return true;
         }
     }
-    return TOX_USERSTATUS_INVALID;
+    return false;
 }
 
 /* tox helpers */
 static gchar *toxprpl_tox_bin_id_to_string(const uint8_t *bin_id)
 {
-    return toxprpl_data_to_hex_string(bin_id, TOX_CLIENT_ID_SIZE);
+    return toxprpl_data_to_hex_string(bin_id, TOX_PUBLIC_KEY_SIZE);
 }
 
 static gchar *toxprpl_tox_friend_id_to_string(uint8_t *bin_id)
 {
-    return toxprpl_data_to_hex_string(bin_id, TOX_FRIEND_ADDRESS_SIZE);
+    return toxprpl_data_to_hex_string(bin_id, TOX_ADDRESS_SIZE);
 }
 
 /* tox specific stuff */
-static void on_connectionstatus(Tox *tox, int32_t fnum, uint8_t status,
+static void on_connectionstatus(Tox *tox, uint32_t fnum, TOX_CONNECTION status,
                                 void *user_data)
 {
     PurpleConnection *gc = (PurpleConnection *)user_data;
     int tox_status = TOXPRPL_STATUS_OFFLINE;
-    if (status == 1)
+    if (status != TOX_CONNECTION_NONE)
     {
         tox_status = TOXPRPL_STATUS_ONLINE;
     }
 
     purple_debug_info("toxprpl", "Friend status change: %d\n", status);
-    uint8_t client_id[TOX_CLIENT_ID_SIZE];
-    if (tox_get_client_id(tox, fnum, client_id) < 0)
+    uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
+    TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
+    // ToDo: Hanndle err_back
+    if (tox_friend_get_public_key(tox, fnum, public_key, &err_back) < 0)
     {
         purple_debug_info("toxprpl", "Could not get id of friend #%d\n",
                           fnum);
         return;
     }
 
-    gchar *buddy_key = toxprpl_tox_bin_id_to_string(client_id);
+    gchar *buddy_key = toxprpl_tox_bin_id_to_string(public_key);
     PurpleAccount *account = purple_connection_get_account(gc);
     purple_prpl_got_user_status(account, buddy_key,
         toxprpl_statuses[tox_status].id, NULL);
@@ -335,7 +339,7 @@ static void on_connectionstatus(Tox *tox, int32_t fnum, uint8_t status,
 }
 
 static void on_request(struct Tox *tox, const uint8_t *public_key,
-                       const uint8_t *data, uint16_t length, void *user_data)
+                       const uint8_t *data, size_t length, void *user_data)
 {
     purple_debug_info("toxprpl", "incoming friend request!\n");
     gchar *dialog_message;
@@ -380,21 +384,51 @@ static void on_request(struct Tox *tox, const uint8_t *public_key,
     g_free(request_msg);
 }
 
-static void on_friend_action(Tox *tox, int32_t friendnum, const uint8_t *string,
-                             uint16_t length, void *user_data)
+static void on_incoming_message(Tox *tox, uint32_t friendnum,
+                                TOX_MESSAGE_TYPE type,
+                                const uint8_t *string,
+                                size_t length, void *user_data)
 {
-    purple_debug_info("toxprpl", "action received\n");
+  // ToDo: Review if/else for overlapping content
+  
+  if (type == TOX_MESSAGE_TYPE_NORMAL)
+  {
+    purple_debug_info("toxprpl", "Message received!\n");
     PurpleConnection *gc = (PurpleConnection *)user_data;
 
-    uint8_t client_id[TOX_CLIENT_ID_SIZE];
-    if (tox_get_client_id(tox, friendnum, client_id) < 0)
+    uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
+    TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
+    // ToDo: Hanndle err_back
+    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) < 0)
     {
         purple_debug_info("toxprpl", "Could not get id of friend %d\n",
                           friendnum);
         return;
     }
 
-    gchar *buddy_key = toxprpl_tox_bin_id_to_string(client_id);
+    gchar *buddy_key = toxprpl_tox_bin_id_to_string(public_key);
+    gchar *safemsg = g_strndup((const char *)string, length);
+    serv_got_im(gc, buddy_key, safemsg, PURPLE_MESSAGE_RECV,
+                time(NULL));
+    g_free(buddy_key);
+    g_free(safemsg);
+  }
+  else if (type == TOX_MESSAGE_TYPE_ACTION)
+  {
+    purple_debug_info("toxprpl", "action received\n");
+    PurpleConnection *gc = (PurpleConnection *)user_data;
+
+    uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
+    TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
+    //ToDo: Handle err_back
+    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) < 0)
+    {
+        purple_debug_info("toxprpl", "Could not get id of friend %d\n",
+                          friendnum);
+        return;
+    }
+
+    gchar *buddy_key = toxprpl_tox_bin_id_to_string(public_key);
     gchar *safemsg = g_strndup((const char *)string, length);
     gchar *message = g_strdup_printf("/me %s", safemsg);
     g_free(safemsg);
@@ -403,47 +437,28 @@ static void on_friend_action(Tox *tox, int32_t friendnum, const uint8_t *string,
                 time(NULL));
     g_free(buddy_key);
     g_free(message);
+  }
+    
 }
 
-static void on_incoming_message(Tox *tox, int32_t friendnum,
-                                const uint8_t *string,
-                                uint16_t length, void *user_data)
-{
-    purple_debug_info("toxprpl", "Message received!\n");
-    PurpleConnection *gc = (PurpleConnection *)user_data;
-
-    uint8_t client_id[TOX_CLIENT_ID_SIZE];
-    if (tox_get_client_id(tox, friendnum, client_id) < 0)
-    {
-        purple_debug_info("toxprpl", "Could not get id of friend %d\n",
-                          friendnum);
-        return;
-    }
-
-    gchar *buddy_key = toxprpl_tox_bin_id_to_string(client_id);
-    gchar *safemsg = g_strndup((const char *)string, length);
-    serv_got_im(gc, buddy_key, safemsg, PURPLE_MESSAGE_RECV,
-                time(NULL));
-    g_free(buddy_key);
-    g_free(safemsg);
-}
-
-static void on_nick_change(Tox *tox, int32_t friendnum, const uint8_t *data,
-                           uint16_t length, void *user_data)
+static void on_nick_change(Tox *tox, uint32_t friendnum, const uint8_t *data,
+                           size_t length, void *user_data)
 {
     purple_debug_info("toxprpl", "Nick change!\n");
 
     PurpleConnection *gc = (PurpleConnection *)user_data;
 
-    uint8_t client_id[TOX_CLIENT_ID_SIZE];
-    if (tox_get_client_id(tox, friendnum, client_id) < 0)
+    uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
+    TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
+    // ToDo: Hanndle err_back
+    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) < 0)
     {
         purple_debug_info("toxprpl", "Could not get id of friend %d\n",
                           friendnum);
         return;
     }
 
-    gchar *buddy_key = toxprpl_tox_bin_id_to_string(client_id);
+    gchar *buddy_key = toxprpl_tox_bin_id_to_string(public_key);
     PurpleAccount *account = purple_connection_get_account(gc);
     PurpleBuddy *buddy = purple_find_buddy(account, buddy_key);
     if (buddy == NULL)
@@ -459,28 +474,32 @@ static void on_nick_change(Tox *tox, int32_t friendnum, const uint8_t *data,
     g_free(safedata);
 }
 
-static void on_status_change(struct Tox *tox, int32_t friendnum,
-                             uint8_t userstatus, void *user_data)
+static void on_status_change(struct Tox *tox, uint32_t friendnum,
+                             TOX_USER_STATUS userstatus,
+                             void *user_data)
 {
     purple_debug_info("toxprpl", "Status change: %d\n", userstatus);
-    uint8_t client_id[TOX_CLIENT_ID_SIZE];
-    if (tox_get_client_id(tox, friendnum, client_id) < 0)
+    uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
+    TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
+    // ToDo: Hanndle err_back
+    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) < 0)
     {
         purple_debug_info("toxprpl", "Could not get id of friend %d\n",
                           friendnum);
         return;
     }
 
-    gchar *buddy_key = toxprpl_tox_bin_id_to_string(client_id);
+    gchar *buddy_key = toxprpl_tox_bin_id_to_string(public_key);
 
     PurpleConnection *gc = (PurpleConnection *)user_data;
     PurpleAccount *account = purple_connection_get_account(gc);
+    
+    char* status = toxprpl_statuses[
+            toxprpl_get_status_index(tox, friendnum, userstatus)].id;
     purple_debug_info("toxprpl", "Setting user status for user %s to %s\n",
-        buddy_key, toxprpl_statuses[
-            toxprpl_get_status_index(tox, friendnum, userstatus)].id);
+        buddy_key, status);
     purple_prpl_got_user_status(account, buddy_key,
-        toxprpl_statuses[
-            toxprpl_get_status_index(tox, friendnum, userstatus)].id,
+        status,
         NULL);
     g_free(buddy_key);
 }
@@ -521,31 +540,31 @@ static void on_file_control(Tox *tox, int32_t friendnumber,
     PurpleXfer* xfer = toxprpl_find_xfer(gc, friendnumber, filenumber);
     toxprpl_return_if_fail(xfer != NULL);
 
-    if (receive_send == 0) //receiving
-    {
-        switch (control_type)
-        {
-            case TOX_FILECONTROL_FINISHED:
-                purple_xfer_set_completed(xfer, TRUE);
-                purple_xfer_end(xfer);
-                break;
-            case TOX_FILECONTROL_KILL:
-                purple_xfer_cancel_remote(xfer);
-                break;
-        }
-    }
-    else //sending
-    {
-        switch (control_type)
-        {
-            case TOX_FILECONTROL_ACCEPT:
-                purple_xfer_start(xfer, -1, NULL, 0);
-                break;
-            case TOX_FILECONTROL_KILL:
-                purple_xfer_cancel_remote(xfer);
-                break;
-        }
-    }
+//     if (receive_send == 0) //receiving
+//     {
+//         switch (control_type)
+//         {
+//             case TOX_FILE_CONTROL_FINISHED:
+//                 purple_xfer_set_completed(xfer, TRUE);
+//                 purple_xfer_end(xfer);
+//                 break;
+//             case TOX_FILE_CONTROL_CANCEL:
+//                 purple_xfer_cancel_remote(xfer);
+//                 break;
+//         }
+//     }
+//     else //sending
+//     {
+//         switch (control_type)
+//         {
+//             case TOX_FILE_CONTROL_ACCEPT:
+//                 purple_xfer_start(xfer, -1, NULL, 0);
+//                 break;
+//             case TOX_FILE_CONTROL_CANCEL:
+//                 purple_xfer_cancel_remote(xfer);
+//                 break;
+//         }
+//     }
 }
 
 static void on_file_send_request(Tox *tox, int32_t friendnumber,
@@ -561,14 +580,16 @@ static void on_file_send_request(Tox *tox, int32_t friendnumber,
     toxprpl_return_if_fail(filename != NULL);
     toxprpl_return_if_fail(tox != NULL);
 
-    uint8_t client_id[TOX_CLIENT_ID_SIZE];
-    if (tox_get_client_id(tox, friendnumber, client_id) < 0)
+    uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
+    TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
+    // ToDo: Hanndle err_back
+    if (tox_friend_get_public_key(tox, friendnumber, public_key, &err_back) < 0)
     {
         purple_debug_info("toxprpl", "Could not get id of friend %d\n",
                           friendnumber);
         return;
     }
-    gchar *buddy_key = toxprpl_tox_bin_id_to_string(client_id);
+    gchar *buddy_key = toxprpl_tox_bin_id_to_string(public_key);
 
     PurpleXfer *xfer = toxprpl_new_xfer_receive(gc, buddy_key, friendnumber,
         filenumber, filesize, (const char*) filename);
@@ -610,7 +631,7 @@ static void on_file_data(Tox *tox, int32_t friendnumber, uint8_t filenumber,
     }
 }
 
-static void on_typing_change(Tox *tox, int32_t friendnum, uint8_t is_typing,
+static void on_typing_change(Tox *tox, uint32_t friendnum, bool is_typing,
                             void *userdata)
 {
     purple_debug_info("toxprpl", "Friend typing status change: %d", friendnum);
@@ -618,15 +639,17 @@ static void on_typing_change(Tox *tox, int32_t friendnum, uint8_t is_typing,
     PurpleConnection *gc = userdata;
     toxprpl_return_if_fail(gc != NULL);
 
-    uint8_t client_id[TOX_CLIENT_ID_SIZE];
-    if (tox_get_client_id(tox, friendnum, client_id) < 0)
+    uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
+    TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
+    // ToDo: Hanndle err_back
+    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) < 0)
     {
         purple_debug_info("toxprpl", "Could not get id of friend %d\n",
                           friendnum);
         return;
     }
 
-    gchar *buddy_key = toxprpl_tox_bin_id_to_string(client_id);
+    gchar *buddy_key = toxprpl_tox_bin_id_to_string(public_key);
     PurpleAccount *account = purple_connection_get_account(gc);
     PurpleBuddy *buddy = purple_find_buddy(account, buddy_key);
     if (buddy == NULL)
@@ -655,7 +678,7 @@ static gboolean tox_messenger_loop(gpointer data)
     toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
     if ((plugin != NULL) && (plugin->tox != NULL))
     {
-        tox_do(plugin->tox);
+        tox_iterate(plugin->tox);
     }
     return TRUE;
 }
@@ -667,16 +690,18 @@ static void toxprpl_set_nick_action(PurpleConnection *gc, const char *nickname)
     if (nickname != NULL)
     {
         purple_connection_set_display_name(gc, nickname);
-        tox_set_name(plugin->tox, (uint8_t *)nickname, strlen(nickname) + 1);
+        TOX_ERR_SET_INFO err_back;
+        // ToDo: Handle err_back
+        tox_self_set_name(plugin->tox, (uint8_t *)nickname, strlen(nickname) + 1, &err_back);
         purple_account_set_string(account, "nickname", nickname);
     }
 }
 
 static gboolean tox_connection_check(gpointer gc)
 {
-    toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
+  toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
 
-    if ((plugin->connected == 0) && tox_isconnected(plugin->tox))
+    if ((plugin->connected == 0) && tox_self_get_connection_status(plugin->tox))
     {
         plugin->connected = 1;
         purple_connection_update_progress(gc, _("Connected"),
@@ -692,13 +717,16 @@ static gboolean tox_connection_check(gpointer gc)
         g_slist_free(buddy_list);
 
         uint8_t our_name[TOX_MAX_NAME_LENGTH + 1];
-        uint16_t name_len = tox_get_self_name(plugin->tox, our_name);
+        tox_self_get_name(plugin->tox, our_name);
+        size_t name_len = tox_self_get_name_size(plugin->tox);
         // bug in the library?
         if (name_len == 0)
         {
             our_name[0] = '\0';
         }
         our_name[TOX_MAX_NAME_LENGTH] = '\0';
+        
+        purple_debug_info("toxprpl", "checking for nickname\n");
 
         const char *nick = purple_account_get_string(account, "nickname", NULL);
         if (strlen(nick) == 0)
@@ -722,7 +750,7 @@ static gboolean tox_connection_check(gpointer gc)
             toxprpl_set_status(account, status);
         }
     }
-    else if ((plugin->connected == 1) && !tox_isconnected(plugin->tox))
+    else if ((plugin->connected == 1) && !tox_self_get_connection_status(plugin->tox))
     {
         plugin->connected = 0;
         purple_debug_info("toxprpl", "DHT disconnected!\n");
@@ -745,17 +773,19 @@ static void toxprpl_set_status(PurpleAccount *account, PurpleStatus *status)
 
     purple_debug_info("toxprpl", "setting status %s\n", status_id);
 
-    TOX_USERSTATUS tox_status = toxprpl_get_tox_status_from_id(status_id);
-    if (tox_status == TOX_USERSTATUS_INVALID)
+    TOX_USER_STATUS tox_status;
+    if (!toxprpl_get_tox_status_from_id(status_id, &tox_status))
     {
-        purple_debug_info("toxprpl", "status %s is invalid\n", status_id);
-        return;
+      purple_debug_info("toxprpl", "status %s is invalid\n", status_id);
+      return;
     }
 
-    tox_set_user_status(plugin->tox, tox_status);
+    tox_self_set_status(plugin->tox, tox_status);
     if ((message != NULL) && (strlen(message) > 0))
     {
-        tox_set_status_message(plugin->tox, (uint8_t *)message, strlen(message) + 1);
+        TOX_ERR_SET_INFO err_back;
+        // ToDo: Handle err_back
+        tox_self_set_status_message(plugin->tox, (uint8_t *)message, strlen(message) + 1, &err_back);
     }
 }
 
@@ -771,7 +801,9 @@ static void toxprpl_query_buddy_info(gpointer data, gpointer user_data)
     if (buddy_data == NULL)
     {
         unsigned char *bin_key = toxprpl_hex_string_to_data(buddy->name);
-        int fnum = tox_get_friend_number(plugin->tox, bin_key);
+        TOX_ERR_FRIEND_BY_PUBLIC_KEY err_back;
+        // ToDo: Handle err_back
+        uint32_t fnum = tox_friend_by_public_key(plugin->tox, bin_key, &err_back);
         buddy_data = g_new0(toxprpl_buddy_data, 1);
         buddy_data->tox_friendlist_number = fnum;
         purple_buddy_set_protocol_data(buddy, buddy_data);
@@ -779,18 +811,23 @@ static void toxprpl_query_buddy_info(gpointer data, gpointer user_data)
     }
 
     PurpleAccount *account = purple_connection_get_account(gc);
+    TOX_ERR_FRIEND_QUERY err_back_status;
     purple_debug_info("toxprpl", "Setting user status for user %s to %s\n",
         buddy->name, toxprpl_statuses[toxprpl_get_status_index(plugin->tox,
             buddy_data->tox_friendlist_number,
-            tox_get_user_status(plugin->tox,buddy_data->tox_friendlist_number))].id);
+            tox_friend_get_status(plugin->tox, buddy_data->tox_friendlist_number, &err_back_status))].id);
     purple_prpl_got_user_status(account, buddy->name,
         toxprpl_statuses[toxprpl_get_status_index(plugin->tox,
             buddy_data->tox_friendlist_number,
-            tox_get_user_status(plugin->tox, buddy_data->tox_friendlist_number))].id,
+            tox_friend_get_status(plugin->tox, buddy_data->tox_friendlist_number, &err_back_status))].id,
         NULL);
-
+    
+    purple_debug_info("toxprpl", "ERR_FRIEND_QUERY: %d\n", err_back_status);
+    
     uint8_t alias[TOX_MAX_NAME_LENGTH + 1];
-    if (tox_get_name(plugin->tox, buddy_data->tox_friendlist_number, alias) == 0)
+    TOX_ERR_FRIEND_QUERY err_back;
+    // ToDo: handle err_back
+    if (tox_friend_get_name(plugin->tox, buddy_data->tox_friendlist_number, alias, &err_back) == 0)
     {
         alias[TOX_MAX_NAME_LENGTH] = '\0';
         purple_blist_alias_buddy(buddy, (const char*)alias);
@@ -830,8 +867,8 @@ static PurpleCmdRet toxprpl_myid_cmd_cb(PurpleConversation *conv,
     PurpleConnection *gc = (PurpleConnection *)data;
     toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
 
-    uint8_t bin_id[TOX_FRIEND_ADDRESS_SIZE];
-    tox_get_address(plugin->tox, bin_id);
+    uint8_t bin_id[TOX_ADDRESS_SIZE];
+    tox_self_get_address(plugin->tox, bin_id);
     gchar *id = toxprpl_tox_friend_id_to_string(bin_id);
 
     gchar *message = g_strdup_printf(_("If someone wants to add you, give them "
@@ -857,19 +894,23 @@ static void toxprpl_sync_add_buddy(PurpleAccount *account, Tox *tox,
                                    int friend_number)
 {
     uint8_t alias[TOX_MAX_NAME_LENGTH + 1];
-    uint8_t client_id[TOX_CLIENT_ID_SIZE];
-    if (tox_get_client_id(tox, friend_number, client_id) < 0)
+    uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
+    TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back_key;
+    // ToDo: Hanndle err_back
+    if (tox_friend_get_public_key(tox, friend_number, public_key, &err_back_key) < 0)
     {
         purple_debug_info("toxprpl", "Could not get id of friend #%d\n",
                           friend_number);
         return;
     }
 
-    gchar *buddy_key = toxprpl_tox_bin_id_to_string(client_id);
+    gchar *buddy_key = toxprpl_tox_bin_id_to_string(public_key);
 
 
     PurpleBuddy *buddy;
-    int ret = tox_get_name(tox, friend_number, alias);
+    TOX_ERR_FRIEND_QUERY err_back_name;
+    // ToDo: Handle err_back_name
+    int ret = tox_friend_get_name(tox, friend_number, alias, &err_back_name);
     alias[TOX_MAX_NAME_LENGTH] = '\0';
     if ((ret == 0) && (strlen((const char *)alias) > 0))
     {
@@ -886,7 +927,9 @@ static void toxprpl_sync_add_buddy(PurpleAccount *account, Tox *tox,
     buddy_data->tox_friendlist_number = friend_number;
     purple_buddy_set_protocol_data(buddy, buddy_data);
     purple_blist_add_buddy(buddy, NULL, NULL, NULL);
-    TOX_USERSTATUS userstatus = tox_get_user_status(tox, friend_number);
+    TOX_ERR_FRIEND_QUERY err_back_status;
+    // ToDo: Handle err_back_status
+    TOX_USER_STATUS userstatus = tox_friend_get_status(tox, friend_number, &err_back_status);
     purple_debug_info("toxprpl", "Friend %s has status %d\n", buddy_key,
                       userstatus);
     purple_prpl_got_user_status(account, buddy_key,
@@ -900,12 +943,12 @@ static void toxprpl_sync_friends(PurpleAccount *acct, Tox *tox)
 {
     uint32_t i;
 
-    uint32_t fl_len = tox_count_friendlist(tox);
+    uint32_t fl_len = tox_self_get_friend_list_size(tox);
     int *friendlist = g_malloc0(fl_len * sizeof(int));
 
-    fl_len = tox_get_friendlist(tox, friendlist, fl_len);
     if (fl_len != 0)
     {
+        tox_self_get_friend_list(tox, friendlist);
         purple_debug_info("toxprpl", "got %u friends\n", fl_len);
         GSList *buddies = purple_find_buddies(acct, NULL);
         GSList *iterator;
@@ -913,8 +956,10 @@ static void toxprpl_sync_friends(PurpleAccount *acct, Tox *tox)
         {
             iterator = buddies;
             int fnum = friendlist[i];
-            uint8_t bin_id[TOX_CLIENT_ID_SIZE];
-            if (tox_get_client_id(tox, fnum, bin_id) == 0)
+            uint8_t bin_id[TOX_PUBLIC_KEY_SIZE];
+            TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
+            // ToDo: Hanndle err_back
+            if (tox_friend_get_public_key(tox, fnum, bin_id, &err_back) == 0)
             {
                 gchar *str_id = toxprpl_tox_bin_id_to_string(bin_id);
                 while (iterator != NULL)
@@ -966,11 +1011,11 @@ static void toxprpl_sync_friends(PurpleAccount *acct, Tox *tox)
 
 static gboolean toxprpl_save_account(PurpleAccount *account, Tox* tox)
 {
-    uint32_t msg_size = tox_size(tox);
+    uint32_t msg_size = tox_get_savedata_size(tox);
     if (msg_size > 0)
     {
         guchar *msg_data = g_malloc0(msg_size);
-        tox_save(tox, (uint8_t *)msg_data);
+        tox_get_savedata(tox, (uint8_t *)msg_data);
         gchar *msg64 = g_base64_encode(msg_data, msg_size);
         purple_account_set_string(account, "messenger", msg64);
         g_free(msg64);
@@ -986,32 +1031,12 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     purple_debug_info("toxprpl", "logging in...\n");
 
     PurpleConnection *gc = purple_account_get_connection(acct);
-
-    Tox *tox = tox_new(0);
-    if (tox == NULL)
-    {
-        purple_debug_info("toxprpl", "Fatal error, could not allocate memory "
-                                     "for messenger!\n");
-        return;
-
-    }
-
-    tox_callback_friend_message(tox, on_incoming_message, gc);
-    tox_callback_name_change(tox, on_nick_change, gc);
-    tox_callback_user_status(tox, on_status_change, gc);
-    tox_callback_friend_request(tox, on_request, gc);
-    tox_callback_connection_status(tox, on_connectionstatus, gc);
-    tox_callback_friend_action(tox, on_friend_action, gc);
-
-    tox_callback_file_send_request(tox, on_file_send_request, gc);
-    tox_callback_file_control(tox, on_file_control, gc);
-    tox_callback_file_data(tox, on_file_data, gc);
-
-    tox_callback_typing_change(tox, on_typing_change, gc);
-    purple_debug_info("toxprpl", "initialized tox callbacks\n");
-
+    
     gc->flags |= PURPLE_CONNECTION_NO_FONTSIZE | PURPLE_CONNECTION_NO_URLDESC;
     gc->flags |= PURPLE_CONNECTION_NO_IMAGES | PURPLE_CONNECTION_NO_NEWLINES;
+
+    TOX_ERR_NEW new_err; // ToDo parse the error code?
+    Tox *tox = tox_new(0, &new_err);
 
     purple_debug_info("toxprpl", "logging in %s\n", acct->username);
 
@@ -1021,13 +1046,31 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
         purple_debug_info("toxprpl", "found existing account data\n");
         gsize out_len;
         guchar *msg_data = g_base64_decode(msg64, &out_len);
+        TOX_ERR_OPTIONS_NEW err_back;
+        // ToDo: Handle err_back
+        struct Tox_Options *options = tox_options_new(&err_back);
+        
+        if (err_back == TOX_ERR_OPTIONS_NEW_MALLOC)
+        {
+          purple_debug_error("toxprpl", "Fatal error, could not allocate memory "
+                                             "for options struct!\n");
+        }
+        
+        options->savedata_length = (uint32_t)out_len;
+        options->savedata_data = (uint8_t *)msg_data;
+        
         if (msg_data && (out_len > 0))
         {
-            if (tox_load(tox, (uint8_t *)msg_data, (uint32_t)out_len) != 0)
+            TOX_ERR_NEW err_back_new;
+            // ToDo: Handle err_back
+            tox = tox_new(options, &err_back_new);
+            if (tox == NULL)
             {
-                purple_debug_info("toxprpl", "Invalid account data\n");
-                purple_account_set_string(acct, "messenger", NULL);
+                purple_debug_error("toxprpl", "Fatal error, could not allocate memory "
+                                             "for messenger!\n");
+                return;
             }
+            purple_account_set_string(acct, "messenger", NULL);
             g_free(msg_data);
         }
     }
@@ -1035,6 +1078,21 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     {
         toxprpl_save_account(acct, tox);
     }
+    tox_callback_friend_message(tox, on_incoming_message, gc);
+    tox_callback_friend_name(tox, on_nick_change, gc);
+    tox_callback_friend_status(tox, on_status_change, gc);
+    tox_callback_friend_request(tox, on_request, gc);
+    tox_callback_friend_connection_status(tox, on_connectionstatus, gc);
+    tox_callback_friend_typing(tox, on_typing_change, gc);
+
+
+//     tox_callback_file_send_request(tox, on_file_send_request, gc);
+//     tox_callback_file_control(tox, on_file_control, gc);
+//     to x_callback_file_data(tox, on_file_data, gc);
+
+    purple_debug_info("toxprpl", "initialized tox callbacks\n");
+
+
 
     purple_connection_update_progress(gc, _("Connecting"),
             0,   /* which connection step this is */
@@ -1056,7 +1114,8 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     purple_debug_info("toxprpl", "Will connect to %s:%d (%s)\n" ,
                       ip, port, key);
 
-    if (tox_bootstrap_from_address(tox, ip, port, bin_str) == 0)
+    TOX_ERR_BOOTSTRAP err_back_bootstr;
+    if (tox_bootstrap(tox, ip, port, bin_str, &err_back_bootstr) == 0)
     {
         purple_connection_error_reason(gc,
                 PURPLE_CONNECTION_ERROR_NETWORK_ERROR,
@@ -1317,21 +1376,22 @@ static int toxprpl_send_im(PurpleConnection *gc, const char *who,
     toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
     char *no_html = purple_markup_strip_html(message);
 
+    TOX_MESSAGE_TYPE msg_type;
     if (purple_message_meify(no_html, -1))
     {
-        if (tox_send_action(plugin->tox, buddy_data->tox_friendlist_number,
-                                    (uint8_t *)no_html, strlen(no_html)) != 0)
-        {
-            message_sent = 1;
-        }
+        msg_type = TOX_MESSAGE_TYPE_ACTION;
     }
     else
     {
-        if (tox_send_message(plugin->tox, buddy_data->tox_friendlist_number,
-                                   (uint8_t *)no_html, strlen(no_html)) != 0)
-        {
-            message_sent = 1;
-        }
+      msg_type = TOX_MESSAGE_TYPE_NORMAL;
+    }
+    
+    TOX_ERR_FRIEND_SEND_MESSAGE err_back;
+    //ToDo: Handle err_back;
+    if (tox_friend_send_message(plugin->tox, buddy_data->tox_friendlist_number, msg_type,
+                                (uint8_t *)no_html, strlen(no_html), &err_back) != 0)
+    {
+        message_sent = 1;
     }
     if (no_html)
     {
@@ -1354,45 +1414,49 @@ static int toxprpl_tox_add_friend(Tox *tox, PurpleConnection *gc,
         {
             message = DEFAULT_REQUEST_MESSAGE;
         }
-        ret = tox_add_friend(tox, bin_key, (uint8_t *)message,
-                            (uint16_t)strlen(message) + 1);
+        TOX_ERR_FRIEND_ADD err_back_add;
+        // ToDo: Handle err_back
+        ret = tox_friend_add(tox, bin_key, (uint8_t *)message,
+                            (uint16_t)strlen(message) + 1, &err_back_add);
     }
     else
     {
-        ret = tox_add_friend_norequest(tox, bin_key);
+        TOX_ERR_FRIEND_ADD err_back_add;
+        //ToDo: Handle err_back
+        ret = tox_friend_add_norequest(tox, bin_key, &err_back_add);
     }
 
     g_free(bin_key);
     const char *msg;
-    switch (ret)
-    {
-        case TOX_FAERR_TOOLONG:
-            msg = "Message too long";
-            break;
-        case TOX_FAERR_NOMESSAGE:
-            msg = "Missing request message";
-            break;
-        case TOX_FAERR_OWNKEY:
-            msg = "You're trying to add yourself as a friend";
-            break;
-        case TOX_FAERR_ALREADYSENT:
-            msg = "Friend request already sent";
-            break;
-        case TOX_FAERR_BADCHECKSUM:
-            msg = "Can't add friend: bad checksum in ID";
-            break;
-        case TOX_FAERR_SETNEWNOSPAM:
-            msg = "Can't add friend: wrong nospam ID";
-            break;
-        case TOX_FAERR_NOMEM:
-            msg = "Could not allocate memory for friendlist";
-            break;
-        case TOX_FAERR_UNKNOWN:
-            msg = "Error adding friend";
-            break;
-        default:
-            break;
-    }
+//     switch (ret)
+//     {
+//         case TOX_FAERR_TOOLONG:
+//             msg = "Message too long";
+//             break;
+//         case TOX_FAERR_NOMESSAGE:
+//             msg = "Missing request message";
+//             break;
+//         case TOX_FAERR_OWNKEY:
+//             msg = "You're trying to add yourself as a friend";
+//             break;
+//         case TOX_FAERR_ALREADYSENT:
+//             msg = "Friend request already sent";
+//             break;
+//         case TOX_FAERR_BADCHECKSUM:
+//             msg = "Can't add friend: bad checksum in ID";
+//             break;
+//         case TOX_FAERR_SETNEWNOSPAM:
+//             msg = "Can't add friend: wrong nospam ID";
+//             break;
+//         case TOX_FAERR_NOMEM:
+//             msg = "Could not allocate memory for friendlist";
+//             break;
+//         case TOX_FAERR_UNKNOWN:
+//             msg = "Error adding friend";
+//             break;
+//         default:
+//             break;
+//     }
 
     if (ret < 0)
     {
@@ -1435,7 +1499,8 @@ static void toxprpl_add_to_buddylist(toxprpl_accept_friend_data *data)
     uint8_t alias[TOX_MAX_NAME_LENGTH + 1];
 
     PurpleBuddy *buddy;
-    int rc = tox_get_name(plugin->tox, ret, alias);
+    TOX_ERR_FRIEND_QUERY err_back;
+    int rc = tox_friend_get_name(plugin->tox, ret, alias, &err_back);
     alias[TOX_MAX_NAME_LENGTH] = '\0';
     if ((rc == 0) && (strlen((const char *)alias) > 0))
     {
@@ -1452,7 +1517,7 @@ static void toxprpl_add_to_buddylist(toxprpl_accept_friend_data *data)
     buddy_data->tox_friendlist_number = ret;
     purple_buddy_set_protocol_data(buddy, buddy_data);
     purple_blist_add_buddy(buddy, NULL, NULL, NULL);
-    TOX_USERSTATUS userstatus = tox_get_user_status(plugin->tox, ret);
+    TOX_USER_STATUS userstatus = tox_friend_get_status(plugin->tox, ret, &err_back);
     purple_debug_info("toxprpl", "Friend %s has status %d\n",
             data->buddy_key, userstatus);
     purple_prpl_got_user_status(account, data->buddy_key,
@@ -1469,7 +1534,7 @@ static void toxprpl_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
     purple_debug_info("toxprpl", "adding %s to buddy list\n", buddy->name);
 
     buddy->name = g_strstrip(buddy->name);
-    if (strlen(buddy->name) != (TOX_FRIEND_ADDRESS_SIZE * 2))
+    if (strlen(buddy->name) != (TOX_ADDRESS_SIZE * 2))
     {
         purple_notify_error(gc, _("Error"),
                             _("Invalid Tox ID given (must be 76 characters "
@@ -1492,8 +1557,8 @@ static void toxprpl_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
     PurpleAccount *account = purple_connection_get_account(gc);
     toxprpl_save_account(account, plugin->tox);
 
-    gchar *cut = g_ascii_strdown(buddy->name, TOX_CLIENT_ID_SIZE * 2 + 1);
-    cut[TOX_CLIENT_ID_SIZE * 2] = '\0';
+    gchar *cut = g_ascii_strdown(buddy->name, TOX_PUBLIC_KEY_SIZE * 2 + 1);
+    cut[TOX_PUBLIC_KEY_SIZE * 2] = '\0';
     purple_debug_info("toxprpl", "converted %s to %s\n", buddy->name, cut);
     purple_blist_rename_buddy(buddy, cut);
     g_free(cut);
@@ -1511,7 +1576,8 @@ static void toxprpl_remove_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
     {
         purple_debug_info("toxprpl", "removing tox friend #%d\n",
                           buddy_data->tox_friendlist_number);
-        tox_del_friend(plugin->tox, buddy_data->tox_friendlist_number);
+        TOX_ERR_FRIEND_DELETE err_back_del;
+        tox_friend_delete(plugin->tox, buddy_data->tox_friendlist_number, &err_back_del);
 
         // save account to make sure buddy stays deleted in case pidgin does
         // not exit cleanly
@@ -1531,8 +1597,8 @@ static void toxprpl_action_show_id_dialog(PurplePluginAction *action)
 
     toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
 
-    uint8_t bin_id[TOX_FRIEND_ADDRESS_SIZE];
-    tox_get_address(plugin->tox, bin_id);
+    uint8_t bin_id[TOX_ADDRESS_SIZE];
+    tox_self_get_address(plugin->tox, bin_id);
     gchar *id = toxprpl_tox_friend_id_to_string(bin_id);
 
     purple_notify_message(gc,
@@ -1578,11 +1644,11 @@ static void toxprpl_user_export(PurpleConnection *gc, const char *filename)
 
     PurpleAccount *account = purple_connection_get_account(gc);
 
-    uint32_t msg_size = tox_size(plugin->tox);
+    uint32_t msg_size = tox_get_savedata_size(plugin->tox);
     if (msg_size > 0)
     {
         uint8_t *account_data = g_malloc0(msg_size);
-        tox_save(plugin->tox, account_data);
+        tox_get_savedata(plugin->tox, account_data);
         guchar *p = account_data;
 
         int fd = open(filename, O_RDWR | O_CREAT | O_BINARY, S_IRUSR | S_IWUSR);
@@ -1641,10 +1707,10 @@ static void toxprpl_export_account_dialog(PurplePluginAction *action)
         return;
     }
 
-    uint8_t bin_id[TOX_FRIEND_ADDRESS_SIZE];
-    tox_get_address(plugin->tox, bin_id);
+    uint8_t bin_id[TOX_ADDRESS_SIZE];
+    tox_self_get_address(plugin->tox, bin_id);
     gchar *id = toxprpl_tox_friend_id_to_string(bin_id);
-    strcpy(id+TOX_CLIENT_ID_SIZE, ".tox\0"); // insert extension instead of nospam
+    strcpy(id+TOX_PUBLIC_KEY_SIZE, ".tox\0"); // insert extension instead of nospam
 
     purple_request_file(gc,
         _("Export existing Tox account data"),
@@ -1713,8 +1779,9 @@ static gboolean toxprpl_can_receive_file(PurpleConnection *gc, const char *who)
     toxprpl_buddy_data *buddy_data = purple_buddy_get_protocol_data(buddy);
     toxprpl_return_val_if_fail(buddy_data != NULL, FALSE);
 
-    return tox_get_friend_connection_status(plugin->tox,
-        buddy_data->tox_friendlist_number) == 1;
+    TOX_ERR_FRIEND_QUERY err_back;
+    return tox_friend_get_connection_status(plugin->tox,
+        buddy_data->tox_friendlist_number, &err_back) == 1;
 }
 
 static gboolean toxprpl_xfer_idle_write(toxprpl_idle_write_data *data)
@@ -1822,18 +1889,29 @@ static void toxprpl_xfer_init(PurpleXfer *xfer)
 
         purple_debug_info("toxprpl", "sending xfer request for file '%s'.\n",
             filename);
-        int filenumber = tox_new_file_sender(plugin->tox, friendnumber, filesize,
-            (uint8_t*) filename, strlen(filename) + 1);
+        TOX_ERR_FILE_SEND err_back;
+        // ToDo maybe parsing the file kind before is necessary
+        int filenumber = tox_file_send(plugin->tox, friendnumber, TOX_FILE_KIND_DATA, filesize, NULL, 
+                       filename, strlen(filename) + 1, &err_back);
+        // ToDo: Handle err_back
         toxprpl_return_if_fail(filenumber >= 0);
 
         xfer_data->tox = plugin->tox;
         xfer_data->friendnumber = buddy_data->tox_friendlist_number;
         xfer_data->filenumber = filenumber;
+        
+        TOX_ERR_FILE_GET* err_file_get;
+        // ToDo: Return type is bool
+        tox_file_get_file_id(plugin->tox, friendnumber, filenumber, xfer_data->file_id,
+                          err_file_get);
+        //ToDo: Handle err_file_get
     }
     else if (purple_xfer_get_type(xfer) == PURPLE_XFER_RECEIVE)
     {
-        tox_file_send_control(xfer_data->tox, xfer_data->friendnumber, 1,
-            xfer_data->filenumber, TOX_FILECONTROL_ACCEPT, NULL, 0);
+        TOX_ERR_FILE_CONTROL err_back;
+        tox_file_control(xfer_data->tox, xfer_data->friendnumber,
+            xfer_data->filenumber, TOX_FILE_CONTROL_RESUME, &err_back);
+        //ToDo Parse error message
         purple_xfer_start(xfer, -1, NULL, 0);
     }
 }
@@ -1848,17 +1926,22 @@ static gssize toxprpl_xfer_write(const guchar *data, size_t len, PurpleXfer *xfe
 
     toxprpl_return_val_if_fail(purple_xfer_get_type(xfer) == PURPLE_XFER_SEND, -1);
 
-    len = MIN((size_t)tox_file_data_size(xfer_data->tox,
-        xfer_data->friendnumber), len);
-    int ret = tox_file_send_data(xfer_data->tox, xfer_data->friendnumber,
-        xfer_data->filenumber, (guchar*)data, len);
+    
+    // send chunk
+    
+    
+//     len = MIN((size_t)tox_file_data_size(xfer_data->tox,
+//         xfer_data->friendnumber), len);
+//     int ret = tox_file_send_data(xfer_data->tox, xfer_data->friendnumber,
+//         xfer_data->filenumber, (guchar*)data, len);
 
-    if (ret != 0)
-    {
-        tox_do(xfer_data->tox);
-        return -1;
-    }
-    return len;
+//     if (ret != 0)
+//     {
+//         tox_iterate(xfer_data->tox);
+//         return -1;
+//     }
+//     return len;
+    return -1;
 }
 
 static gssize toxprpl_xfer_read(guchar **data, PurpleXfer *xfer)
@@ -1895,8 +1978,10 @@ static void toxprpl_xfer_cancel_send(PurpleXfer *xfer)
 
     if (xfer_data->tox != NULL)
     {
-        tox_file_send_control(xfer_data->tox, xfer_data->friendnumber,
-            0, xfer_data->filenumber, TOX_FILECONTROL_KILL, NULL, 0);
+      TOX_ERR_FILE_CONTROL err_back;
+      tox_file_control(xfer_data->tox, xfer_data->friendnumber, xfer_data->filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
+      // ToDo Handle err_back
+
     }
     toxprpl_xfer_free(xfer);
 }
@@ -1909,8 +1994,9 @@ static void toxprpl_xfer_cancel_recv(PurpleXfer *xfer)
 
     if (xfer_data->tox != NULL)
     {
-        tox_file_send_control(xfer_data->tox, xfer_data->friendnumber,
-            1, xfer_data->filenumber, TOX_FILECONTROL_KILL, NULL, 0);
+      TOX_ERR_FILE_CONTROL err_back;
+      tox_file_control(xfer_data->tox, xfer_data->friendnumber, xfer_data->filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
+      // ToDo Handle err_back
     }
     toxprpl_xfer_free(xfer);
 }
@@ -1924,8 +2010,9 @@ static void toxprpl_xfer_request_denied(PurpleXfer *xfer)
     toxprpl_xfer_data *xfer_data = xfer->data;
     if (xfer_data->tox != NULL)
     {
-        tox_file_send_control(xfer_data->tox, xfer_data->friendnumber, 1,
-            xfer_data->filenumber, TOX_FILECONTROL_KILL, NULL, 0);
+      TOX_ERR_FILE_CONTROL err_back;
+      tox_file_control(xfer_data->tox, xfer_data->friendnumber, xfer_data->filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
+      // ToDo Handle err_back
     }
     toxprpl_xfer_free(xfer);
 }
@@ -1936,16 +2023,17 @@ static void toxprpl_xfer_end(PurpleXfer *xfer)
     toxprpl_return_if_fail(xfer != NULL);
     toxprpl_xfer_data *xfer_data = xfer->data;
 
-    if (purple_xfer_get_type(xfer) == PURPLE_XFER_SEND)
-    {
-        tox_file_send_control(xfer_data->tox, xfer_data->friendnumber,
-            0, xfer_data->filenumber, TOX_FILECONTROL_FINISHED, NULL, 0);
-    }
-    else
-    {
-        tox_file_send_control(xfer_data->tox, xfer_data->friendnumber,
-            1, xfer_data->filenumber, TOX_FILECONTROL_FINISHED, NULL, 0);
-    }
+    // ToDo
+//     if (purple_xfer_get_type(xfer) == PURPLE_XFER_SEND)
+//     {
+//         tox_file_send_control(xfer_data->tox, xfer_data->friendnumber,
+//             0, xfer_data->filenumber, TOX_FILE_CONTROL_FINISHED, NULL, 0);
+//     }
+//     else
+//     {
+//         tox_file_send_control(xfer_data->tox, xfer_data->friendnumber,
+//             1, xfer_data->filenumber, TOX_FILE_CONTROL_FINISHED, NULL, 0);
+//     }
 
     toxprpl_xfer_free(xfer);
 }
@@ -2058,21 +2146,22 @@ static unsigned int toxprpl_send_typing(PurpleConnection *gc, const char *who,
     toxprpl_buddy_data *buddy_data = purple_buddy_get_protocol_data(buddy);
     toxprpl_return_val_if_fail(buddy_data != NULL, 0);
 
+    TOX_ERR_SET_TYPING err_back_typing;
     switch(state)
     {
         case PURPLE_TYPING:
             purple_debug_info("toxprpl", "Send typing state: TYPING\n");
-            tox_set_user_is_typing(plugin->tox, buddy_data->tox_friendlist_number, TRUE);
+            tox_self_set_typing(plugin->tox, buddy_data->tox_friendlist_number, TRUE, &err_back_typing);
             break;
 
         case PURPLE_TYPED:
             purple_debug_info("toxprpl", "Send typing state: TYPED\n"); /* typing pause */
-            tox_set_user_is_typing(plugin->tox, buddy_data->tox_friendlist_number, FALSE);
+            tox_self_set_typing(plugin->tox, buddy_data->tox_friendlist_number, FALSE, &err_back_typing);
             break;
 
         default:
             purple_debug_info("toxprpl", "Send typing state: NOT_TYPING\n");
-            tox_set_user_is_typing(plugin->tox, buddy_data->tox_friendlist_number, FALSE);
+            tox_self_set_typing(plugin->tox, buddy_data->tox_friendlist_number, FALSE, &err_back_typing);
             break;
     }
 
