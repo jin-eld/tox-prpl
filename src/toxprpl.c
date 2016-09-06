@@ -141,8 +141,8 @@ typedef struct
 typedef struct
 {
     Tox *tox;
-    int friendnumber;
-    uint8_t filenumber;
+    uint32_t friendnumber;
+    uint32_t filenumber;
     toxprpl_idle_write_data *idle_write_data;
     uint8_t *file_id;
 } toxprpl_xfer_data;
@@ -194,7 +194,7 @@ static void toxprpl_login(PurpleAccount *acct);
 static void toxprpl_query_buddy_info(gpointer data, gpointer user_data);
 static void toxprpl_set_status(PurpleAccount *account, PurpleStatus *status);
 static PurpleXfer *toxprpl_new_xfer_receive(PurpleConnection *gc,
-    const char *who, int friendnumber, int filenumber, const goffset filesize,
+    const char *who, uint32_t friendnumber, uint32_t filenumber, const goffset filesize,
     const char *filename);
 
 // utilitis
@@ -505,7 +505,7 @@ static void on_status_change(struct Tox *tox, uint32_t friendnum,
 }
 
 //TODO create an inverted table to speed this up
-static PurpleXfer *toxprpl_find_xfer(PurpleConnection *gc, int friendnumber, uint8_t filenumber)
+static PurpleXfer *toxprpl_find_xfer(PurpleConnection *gc, uint32_t friendnumber, uint32_t filenumber)
 {
     PurpleAccount *account = purple_connection_get_account(gc);
     toxprpl_return_val_if_fail(account != NULL, NULL);
@@ -575,47 +575,55 @@ void on_file_chunk_request(Tox *m, uint32_t friendnum, uint32_t filenum,
     purple_xfer_update_progress(xfer);
 }
 
-static void on_file_control(Tox *tox, int32_t friendnumber,
-                            uint8_t receive_send, uint8_t filenumber,
-                            uint8_t control_type, const uint8_t *data,
-                            uint16_t length, void *userdata)
+void on_file_recv_chunk(Tox *m, uint32_t friendnum, uint32_t filenum,
+        uint64_t position, const uint8_t* data, size_t length, void *userdata) {
+    purple_debug_info("toxprpl", "on_file_recv_chunk\n");
+    PurpleConnection *gc = userdata;
+    toxprpl_return_if_fail(gc != NULL);
+
+    PurpleXfer* xfer = toxprpl_find_xfer(gc, friendnum, filenum);
+    if(length == 0) {
+      purple_debug_info("toxprpl", "file successfully received.\n");
+      purple_xfer_set_completed(xfer, TRUE);
+      purple_xfer_end(xfer);
+      return;
+    }
+
+    FILE* fp = fopen(xfer->local_filename, "a");
+    if(fp == NULL) {
+      purple_debug_info("toxprpl", "file could not be opened for writing.\n");
+      return;
+    }
+
+    while(fwrite(data, length, 1, fp) == -1) {
+      if(errno != EAGAIN) {
+        perror("toxprpl: file");
+        fclose(fp);
+        return;
+      }
+    }
+    fclose(fp);
+
+    xfer->bytes_sent += length;
+    purple_xfer_update_progress(xfer);
+}
+
+static void on_file_control(Tox *tox, uint32_t friendnumber,
+                            uint32_t filenumber, TOX_FILE_CONTROL control_type, 
+                            void *userdata)
 {
-    purple_debug_info("toxprpl", "file control: %i (%s) %i\n", friendnumber,
-        receive_send == 0 ? "rx" : "tx", filenumber);
+    fprintf(stderr, "toxprpl: file control type: %d\n", control_type);
     PurpleConnection *gc = userdata;
     toxprpl_return_if_fail(gc != NULL);
 
     PurpleXfer* xfer = toxprpl_find_xfer(gc, friendnumber, filenumber);
     toxprpl_return_if_fail(xfer != NULL);
-
-     if (receive_send == 0) //receiving
-     {
-         switch (control_type)
-         {
-             case TOX_FILE_CONTROL_CANCEL:
-                 purple_xfer_set_completed(xfer, TRUE);
-                 purple_xfer_end(xfer);
-                 break;
-         }
-     }
-     else //sending
-     {
-         switch (control_type)
-         {
-             case TOX_FILE_CONTROL_RESUME:
-                 purple_xfer_start(xfer, -1, NULL, 0);
-                 break;
-             case TOX_FILE_CONTROL_CANCEL:
-                 purple_xfer_cancel_remote(xfer);
-                 break;
-         }
-     }
 }
 
-static void on_file_send_request(Tox *tox, int32_t friendnumber,
-                                 uint8_t filenumber,
+static void on_file_recv(Tox *tox, uint32_t friendnumber,
+                                 uint32_t filenumber, uint32_t kind,
                                  uint64_t filesize, const uint8_t *filename,
-                                 uint16_t filename_length, void *userdata)
+                                 size_t filename_length, void *userdata)
 {
     purple_debug_info("toxprpl", "file_send_request: %i %i\n", friendnumber,
         filenumber);
@@ -645,6 +653,8 @@ static void on_file_send_request(Tox *tox, int32_t friendnumber,
         return;
     }
     toxprpl_return_if_fail(xfer != NULL);
+    toxprpl_xfer_data *xfer_data = xfer->data;
+    purple_debug_warning("toxprpl", "xfer fn/fn: %d %d %d %d\n", xfer_data->friendnumber, xfer_data->filenumber, friendnumber, filenumber);
     purple_xfer_request(xfer);
     g_free(buddy_key);
 }
@@ -1135,10 +1145,10 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
 //     tox_callback_file_send_request(tox, on_file_send_request, gc);
 //     tox_callback_file_control(tox, on_file_control, gc);
 //     to x_callback_file_data(tox, on_file_data, gc);
-    //tox_callback_file_recv(tox, on_file_recv, gc);
+    tox_callback_file_recv(tox, on_file_recv, gc);
     tox_callback_file_chunk_request(tox, on_file_chunk_request, gc);
-    //tox_callback_file_recv_control(tox, on_file_control, gc);
-    //tox_callback_file_recv_chunk(tox, on_file_recv_chunk, gc);
+    tox_callback_file_recv_control(tox, on_file_control, gc);
+    tox_callback_file_recv_chunk(tox, on_file_recv_chunk, gc);
 
     purple_debug_info("toxprpl", "initialized tox callbacks\n");
 
@@ -1907,6 +1917,7 @@ static void toxprpl_xfer_start(PurpleXfer *xfer)
 
 static void toxprpl_xfer_init(PurpleXfer *xfer)
 {
+   TOX_ERR_FILE_CONTROL err_back;
     purple_debug_info("toxprpl", "xfer_init\n");
     toxprpl_return_if_fail(xfer != NULL);
 
@@ -1958,12 +1969,39 @@ static void toxprpl_xfer_init(PurpleXfer *xfer)
     }
     else if (purple_xfer_get_type(xfer) == PURPLE_XFER_RECEIVE)
     {
-        TOX_ERR_FILE_CONTROL err_back;
+        const char *filename = purple_xfer_get_filename(xfer);
+        purple_debug_info("toxprpl", "sending recv control for file '%s' %d %d.\n",
+            filename, xfer_data->friendnumber, xfer_data->filenumber);
+
         tox_file_control(xfer_data->tox, xfer_data->friendnumber,
             xfer_data->filenumber, TOX_FILE_CONTROL_RESUME, &err_back);
         //ToDo Parse error message
+        if (err_back != TOX_ERR_FILE_CONTROL_OK)
+          goto on_recv_error;
+
         purple_xfer_start(xfer, -1, NULL, 0);
     }
+    return;
+
+    on_recv_error:
+    switch (err_back) {
+        case TOX_ERR_FILE_CONTROL_FRIEND_NOT_FOUND:
+            purple_debug_info("toxprpl", "File transfer failed: Friend not found.");
+            return;
+        case TOX_ERR_FILE_CONTROL_FRIEND_NOT_CONNECTED:
+            purple_debug_info("toxprpl", "File transfer failed: Friend is not online.");
+            return;
+        case TOX_ERR_FILE_CONTROL_NOT_FOUND:
+            purple_debug_info("toxprpl", "File transfer failed: Invalid filenumber.");
+            return;
+        case TOX_ERR_FILE_CONTROL_SENDQ:
+            purple_debug_info("toxprpl", "File transfer failed: Connection error.");
+            return;
+        default:
+            purple_debug_info("toxprpl", "File transfer failed (error %d)\n", err_back);
+            return;
+    }
+
 }
 
 static gssize toxprpl_xfer_write(const guchar *data, size_t len, PurpleXfer *xfer)
@@ -2119,7 +2157,7 @@ static PurpleXfer *toxprpl_new_xfer(PurpleConnection *gc, const gchar *who)
 }
 
 static PurpleXfer* toxprpl_new_xfer_receive(PurpleConnection *gc, const char *who,
-    int friendnumber, int filenumber, const goffset filesize, const char *filename)
+    uint32_t friendnumber, uint32_t filenumber, const goffset filesize, const char *filename)
 {
     purple_debug_info("toxprpl", "new_xfer_receive\n");
     toxprpl_return_val_if_fail(gc != NULL, NULL);
@@ -2141,6 +2179,7 @@ static PurpleXfer* toxprpl_new_xfer_receive(PurpleConnection *gc, const char *wh
     xfer_data->friendnumber = friendnumber;
     xfer_data->filenumber = filenumber;
     xfer->data = xfer_data;
+    purple_debug_warning("toxprpl", "new_xfer_receive fn/fn: %d %d %d %d\n", xfer_data->friendnumber, xfer_data->filenumber, friendnumber, filenumber);
 
     purple_xfer_set_filename(xfer, filename);
     purple_xfer_set_size(xfer, filesize);
