@@ -536,6 +536,8 @@ void on_file_chunk_request(Tox *m, uint32_t friendnum, uint32_t filenum,
     PurpleXfer* xfer = toxprpl_find_xfer(gc, friendnum, filenum);
     if(length == 0) {
       purple_debug_info("toxprpl", "file successfully sent.\n");
+      purple_xfer_set_completed(xfer, TRUE);
+      purple_xfer_end(xfer);
       return;
     }
 
@@ -570,7 +572,7 @@ void on_file_chunk_request(Tox *m, uint32_t friendnum, uint32_t filenum,
         purple_debug_info("toxprpl", "file chunk send fail\n");
 
     xfer->bytes_sent += send_length;
-
+    purple_xfer_update_progress(xfer);
 }
 
 static void on_file_control(Tox *tox, int32_t friendnumber,
@@ -586,31 +588,28 @@ static void on_file_control(Tox *tox, int32_t friendnumber,
     PurpleXfer* xfer = toxprpl_find_xfer(gc, friendnumber, filenumber);
     toxprpl_return_if_fail(xfer != NULL);
 
-//     if (receive_send == 0) //receiving
-//     {
-//         switch (control_type)
-//         {
-//             case TOX_FILE_CONTROL_FINISHED:
-//                 purple_xfer_set_completed(xfer, TRUE);
-//                 purple_xfer_end(xfer);
-//                 break;
-//             case TOX_FILE_CONTROL_CANCEL:
-//                 purple_xfer_cancel_remote(xfer);
-//                 break;
-//         }
-//     }
-//     else //sending
-//     {
-//         switch (control_type)
-//         {
-//             case TOX_FILE_CONTROL_ACCEPT:
-//                 purple_xfer_start(xfer, -1, NULL, 0);
-//                 break;
-//             case TOX_FILE_CONTROL_CANCEL:
-//                 purple_xfer_cancel_remote(xfer);
-//                 break;
-//         }
-//     }
+     if (receive_send == 0) //receiving
+     {
+         switch (control_type)
+         {
+             case TOX_FILE_CONTROL_CANCEL:
+                 purple_xfer_set_completed(xfer, TRUE);
+                 purple_xfer_end(xfer);
+                 break;
+         }
+     }
+     else //sending
+     {
+         switch (control_type)
+         {
+             case TOX_FILE_CONTROL_RESUME:
+                 purple_xfer_start(xfer, -1, NULL, 0);
+                 break;
+             case TOX_FILE_CONTROL_CANCEL:
+                 purple_xfer_cancel_remote(xfer);
+                 break;
+         }
+     }
 }
 
 static void on_file_send_request(Tox *tox, int32_t friendnumber,
