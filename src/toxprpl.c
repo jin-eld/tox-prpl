@@ -527,6 +527,52 @@ static PurpleXfer *toxprpl_find_xfer(PurpleConnection *gc, int friendnumber, uin
     return NULL;
 }
 
+void on_file_chunk_request(Tox *m, uint32_t friendnum, uint32_t filenum,
+        uint64_t position, size_t length, void *userdata) {
+    purple_debug_info("toxprpl", "on_file_chunk_request\n");
+    PurpleConnection *gc = userdata;
+    toxprpl_return_if_fail(gc != NULL);
+
+    PurpleXfer* xfer = toxprpl_find_xfer(gc, friendnum, filenum);
+    if(length == 0) {
+      purple_debug_info("toxprpl", "file successfully sent.\n");
+      return;
+    }
+
+    FILE* fp = fopen(xfer->local_filename, "r");
+    if(fp == NULL) {
+      purple_debug_info("toxprpl", "file could not be opened.\n");
+      return;
+    }
+
+    if(ftello(fp) != position) {
+        while (fseeko(fp, position, SEEK_SET) == -1) {
+          if(errno != EAGAIN) {
+            perror("toxprpl: file");
+            return;
+          }
+        }
+    }
+    xfer->bytes_sent = position;
+
+    uint8_t send_data[length];
+    size_t send_length = fread(send_data, 1, sizeof(send_data), fp);
+    if(send_length != length) {
+        purple_debug_info("toxprpl", "file read fail\n");
+      fclose(fp);
+      return;
+    }
+    fclose(fp);
+
+    TOX_ERR_FILE_SEND_CHUNK err;
+    tox_file_send_chunk(m, friendnum, filenum, position, send_data, send_length, &err);
+    if (err != TOX_ERR_FILE_SEND_CHUNK_OK)
+        purple_debug_info("toxprpl", "file chunk send fail\n");
+
+    xfer->bytes_sent += send_length;
+
+}
+
 static void on_file_control(Tox *tox, int32_t friendnumber,
                             uint8_t receive_send, uint8_t filenumber,
                             uint8_t control_type, const uint8_t *data,
@@ -1090,6 +1136,10 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
 //     tox_callback_file_send_request(tox, on_file_send_request, gc);
 //     tox_callback_file_control(tox, on_file_control, gc);
 //     to x_callback_file_data(tox, on_file_data, gc);
+    //tox_callback_file_recv(tox, on_file_recv, gc);
+    tox_callback_file_chunk_request(tox, on_file_chunk_request, gc);
+    //tox_callback_file_recv_control(tox, on_file_control, gc);
+    //tox_callback_file_recv_chunk(tox, on_file_recv_chunk, gc);
 
     purple_debug_info("toxprpl", "initialized tox callbacks\n");
 
@@ -1919,6 +1969,8 @@ static void toxprpl_xfer_init(PurpleXfer *xfer)
 
 static gssize toxprpl_xfer_write(const guchar *data, size_t len, PurpleXfer *xfer)
 {
+    purple_debug_info("toxprpl", "xfer_write\n");
+
     toxprpl_return_val_if_fail(data != NULL, -1);
     toxprpl_return_val_if_fail(len > 0, -1);
     toxprpl_return_val_if_fail(xfer != NULL, -1);
