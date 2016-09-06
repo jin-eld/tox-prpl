@@ -1056,6 +1056,7 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
                                              "for options struct!\n");
         }
         
+        options->savedata_type = TOX_SAVEDATA_TYPE_TOX_SAVE;
         options->savedata_length = (uint32_t)out_len;
         options->savedata_data = (uint8_t *)msg_data;
         
