@@ -252,6 +252,26 @@ int mkdir_p(const char *dir, const mode_t mode) {
     return 0;
 }
 
+void toxprpl_err_file_control(TOX_ERR_FILE_CONTROL err) {
+    switch (err) {
+        case TOX_ERR_FILE_CONTROL_FRIEND_NOT_FOUND:
+            purple_debug_info("toxprpl", "File transfer failed: Friend not found.");
+            return;
+        case TOX_ERR_FILE_CONTROL_FRIEND_NOT_CONNECTED:
+            purple_debug_info("toxprpl", "File transfer failed: Friend is not online.");
+            return;
+        case TOX_ERR_FILE_CONTROL_NOT_FOUND:
+            purple_debug_info("toxprpl", "File transfer failed: Invalid filenumber.");
+            return;
+        case TOX_ERR_FILE_CONTROL_SENDQ:
+            purple_debug_info("toxprpl", "File transfer failed: Connection error.");
+            return;
+        default:
+            purple_debug_info("toxprpl", "File transfer failed (error %d)\n", err);
+            return;
+    }
+}
+
 // returned buffer must be freed by the caller
 static char *toxprpl_data_to_hex_string(const unsigned char *data,
                                         const size_t len)
@@ -1976,32 +1996,13 @@ static void toxprpl_xfer_init(PurpleXfer *xfer)
         tox_file_control(xfer_data->tox, xfer_data->friendnumber,
             xfer_data->filenumber, TOX_FILE_CONTROL_RESUME, &err_back);
         //ToDo Parse error message
-        if (err_back != TOX_ERR_FILE_CONTROL_OK)
-          goto on_recv_error;
+        if (err_back != TOX_ERR_FILE_CONTROL_OK) {
+          toxprpl_err_file_control(err_back);
+          return;
+        }
 
         purple_xfer_start(xfer, -1, NULL, 0);
     }
-    return;
-
-    on_recv_error:
-    switch (err_back) {
-        case TOX_ERR_FILE_CONTROL_FRIEND_NOT_FOUND:
-            purple_debug_info("toxprpl", "File transfer failed: Friend not found.");
-            return;
-        case TOX_ERR_FILE_CONTROL_FRIEND_NOT_CONNECTED:
-            purple_debug_info("toxprpl", "File transfer failed: Friend is not online.");
-            return;
-        case TOX_ERR_FILE_CONTROL_NOT_FOUND:
-            purple_debug_info("toxprpl", "File transfer failed: Invalid filenumber.");
-            return;
-        case TOX_ERR_FILE_CONTROL_SENDQ:
-            purple_debug_info("toxprpl", "File transfer failed: Connection error.");
-            return;
-        default:
-            purple_debug_info("toxprpl", "File transfer failed (error %d)\n", err_back);
-            return;
-    }
-
 }
 
 static void toxprpl_xfer_free(PurpleXfer *xfer)
@@ -2034,7 +2035,7 @@ static void toxprpl_xfer_cancel_send(PurpleXfer *xfer)
     {
       TOX_ERR_FILE_CONTROL err_back;
       tox_file_control(xfer_data->tox, xfer_data->friendnumber, xfer_data->filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
-      // ToDo Handle err_back
+      toxprpl_err_file_control(err_back);
 
     }
     toxprpl_xfer_free(xfer);
@@ -2050,7 +2051,7 @@ static void toxprpl_xfer_cancel_recv(PurpleXfer *xfer)
     {
       TOX_ERR_FILE_CONTROL err_back;
       tox_file_control(xfer_data->tox, xfer_data->friendnumber, xfer_data->filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
-      // ToDo Handle err_back
+      toxprpl_err_file_control(err_back);
     }
     toxprpl_xfer_free(xfer);
 }
@@ -2066,7 +2067,7 @@ static void toxprpl_xfer_request_denied(PurpleXfer *xfer)
     {
       TOX_ERR_FILE_CONTROL err_back;
       tox_file_control(xfer_data->tox, xfer_data->friendnumber, xfer_data->filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
-      // ToDo Handle err_back
+      toxprpl_err_file_control(err_back);
     }
     toxprpl_xfer_free(xfer);
 }
