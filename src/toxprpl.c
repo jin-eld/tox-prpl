@@ -1850,47 +1850,6 @@ static gboolean toxprpl_xfer_idle_write(toxprpl_idle_write_data *data)
     return FALSE;
 }
 
-static void toxprpl_xfer_start(PurpleXfer *xfer)
-{
-    purple_debug_info("toxprpl", "xfer_start\n");
-    toxprpl_return_if_fail(xfer != NULL);
-    toxprpl_return_if_fail(xfer->data != NULL);
-
-    toxprpl_xfer_data *xfer_data = xfer->data;
-
-    if (purple_xfer_get_type(xfer) == PURPLE_XFER_SEND)
-    {
-        //copy whole file into memory
-        size_t bytes_remaining = purple_xfer_get_bytes_remaining(xfer);
-        uint8_t *buffer = g_malloc(bytes_remaining);
-        uint8_t *offset = buffer;
-
-        toxprpl_return_if_fail(buffer != NULL);
-        size_t read_bytes = fread(buffer, sizeof(uint8_t), bytes_remaining, xfer->dest_fp);
-        if (read_bytes != bytes_remaining)
-        {
-            purple_debug_warning("toxprpl", "read_bytes != bytes_remaining\n");
-            g_free(buffer);
-            return;
-        }
-
-        toxprpl_idle_write_data *data = g_new0(toxprpl_idle_write_data, 1);
-        if (data == NULL)
-        {
-            purple_debug_warning("toxprpl", "data == NULL");
-            g_free(buffer);
-            return;
-        }
-        data->xfer = xfer;
-        data->buffer = buffer;
-        data->offset = offset;
-        data->running = TRUE;
-        xfer_data->idle_write_data = data;
-
-        g_idle_add((GSourceFunc)toxprpl_xfer_idle_write, data);
-    }
-}
-
 static void toxprpl_xfer_init(PurpleXfer *xfer)
 {
    TOX_ERR_FILE_CONTROL err_back;
@@ -2111,9 +2070,6 @@ static PurpleXfer *toxprpl_new_xfer(PurpleConnection *gc, const gchar *who)
     xfer->data = xfer_data;
 
     purple_xfer_set_init_fnc(xfer, toxprpl_xfer_init);
-    purple_xfer_set_start_fnc(xfer, toxprpl_xfer_start);
-    //purple_xfer_set_write_fnc(xfer, toxprpl_xfer_write);
-    //purple_xfer_set_read_fnc(xfer, toxprpl_xfer_read);
     purple_xfer_set_cancel_send_fnc(xfer, toxprpl_xfer_cancel_send);
     purple_xfer_set_end_fnc(xfer, toxprpl_xfer_end);
 
@@ -2148,9 +2104,6 @@ static PurpleXfer* toxprpl_new_xfer_receive(PurpleConnection *gc, const char *wh
     purple_xfer_set_size(xfer, filesize);
 
     purple_xfer_set_init_fnc(xfer, toxprpl_xfer_init);
-    purple_xfer_set_start_fnc(xfer, toxprpl_xfer_start);
-    //purple_xfer_set_write_fnc(xfer, toxprpl_xfer_write);
-    //purple_xfer_set_read_fnc(xfer, toxprpl_xfer_read);
     purple_xfer_set_request_denied_fnc(xfer, toxprpl_xfer_request_denied);
     purple_xfer_set_cancel_recv_fnc(xfer, toxprpl_xfer_cancel_recv);
     purple_xfer_set_end_fnc(xfer, toxprpl_xfer_end);
