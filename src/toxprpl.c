@@ -80,6 +80,7 @@
 #define DEFAULT_SERVER_KEY "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074"
 #define DEFAULT_SERVER_PORT 33445
 #define DEFAULT_SERVER_IP   "tox.zodiaclabs.org"
+#define DEFAULT_ACCOUNT_PATH "toxedpidgin"
 
 #define DEFAULT_REQUEST_MESSAGE _("Please allow me to add you as a friend!")
 
@@ -196,8 +197,60 @@ static void toxprpl_set_status(PurpleAccount *account, PurpleStatus *status);
 static PurpleXfer *toxprpl_new_xfer_receive(PurpleConnection *gc,
     const char *who, uint32_t friendnumber, uint32_t filenumber, const goffset filesize,
     const char *filename);
+static void toxprpl_user_export(PurpleConnection *gc, const char *filename);
+static void toxprpl_user_import(PurpleAccount *acct, const char *filename);
 
 // utilitis
+#define PATH_MAX_STRING_SIZE 256
+
+/* recursive mkdir */
+int mkdir_p(const char *dir, const mode_t mode) {
+    char tmp[PATH_MAX_STRING_SIZE];
+    char *p = NULL;
+    struct stat sb;
+    size_t len;
+
+    /* copy path */
+    strncpy(tmp, dir, sizeof(tmp));
+    len = strlen(tmp);
+    if (len >= sizeof(tmp)) {
+        return -1;
+    }
+
+    /* remove trailing slash */
+    if(tmp[len - 1] == '/') {
+        tmp[len - 1] = 0;
+    }
+
+    /* recursive mkdir */
+    for(p = tmp + 1; *p; p++) {
+        if(*p == '/') {
+            *p = 0;
+            /* test path */
+            if (stat(tmp, &sb) != 0) {
+                /* path does not exist - create directory */
+                if (mkdir(tmp, mode) < 0) {
+                    return -1;
+                }
+            } else if (!S_ISDIR(sb.st_mode)) {
+                /* not a directory */
+                return -1;
+            }
+            *p = '/';
+        }
+    }
+    /* test path */
+    if (stat(tmp, &sb) != 0) {
+        /* path does not exist - create directory */
+        if (mkdir(tmp, mode) < 0) {
+            return -1;
+        }
+    } else if (!S_ISDIR(sb.st_mode)) {
+        /* not a directory */
+        return -1;
+    }
+    return 0;
+}
 
 // returned buffer must be freed by the caller
 static char *toxprpl_data_to_hex_string(const unsigned char *data,
@@ -1045,7 +1098,15 @@ static void toxprpl_sync_friends(PurpleAccount *acct, Tox *tox)
 
 static gboolean toxprpl_save_account(PurpleAccount *account, Tox* tox)
 {
-    uint32_t msg_size = tox_get_savedata_size(tox);
+    PurpleConnection *gc = purple_account_get_connection(account);
+    const char *key = purple_account_get_string(account, "account_path",
+                                          DEFAULT_ACCOUNT_PATH);
+    gchar* filename = g_build_filename(purple_user_dir(), "tox", key, "tox_save.tox", NULL);
+    gchar* dirname = g_path_get_dirname(filename);
+    mkdir_p(dirname, 0777);
+    toxprpl_user_export(gc, filename);
+
+    /*uint32_t msg_size = tox_get_savedata_size(tox);
     if (msg_size > 0)
     {
         guchar *msg_data = g_malloc0(msg_size);
@@ -1057,7 +1118,7 @@ static gboolean toxprpl_save_account(PurpleAccount *account, Tox* tox)
         return TRUE;
     }
 
-    return FALSE;
+    return FALSE;*/
 }
 
 static void toxprpl_login_after_setup(PurpleAccount *acct)
@@ -1074,6 +1135,7 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
 
     purple_debug_info("toxprpl", "logging in %s\n", acct->username);
 
+    //toxprpl_user_import(acct, "/home/tom/.purple/tox_save.tox");
     const char *msg64 = purple_account_get_string(acct, "messenger", NULL);
     if ((msg64 != NULL) && (strlen(msg64) > 0))
     {
@@ -1217,38 +1279,38 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename)
     GStatBuf sb;
     if (g_stat(filename, &sb) != 0)
     {
-        purple_notify_message(gc,
-                PURPLE_NOTIFY_MSG_ERROR,
-                _("Error"),
-                _("Could not access account data file:"),
-                filename,
-                (PurpleNotifyCloseCallback)toxprpl_login,
-                acct);
+        //purple_notify_message(gc,
+        //        PURPLE_NOTIFY_MSG_ERROR,
+        //        _("Error"),
+        //        _("Could not access account data file:"),
+        //        filename,
+        //        (PurpleNotifyCloseCallback)toxprpl_login,
+        //        acct);
         return;
     }
 
     if ((sb.st_size == 0) || (sb.st_size > MAX_ACCOUNT_DATA_SIZE))
     {
-        purple_notify_message(gc,
-                PURPLE_NOTIFY_MSG_ERROR,
-                _("Error"),
-                _("Account data file seems to be invalid"),
-                NULL,
-                (PurpleNotifyCloseCallback)toxprpl_login,
-                acct);
+        //purple_notify_message(gc,
+        //        PURPLE_NOTIFY_MSG_ERROR,
+        //        _("Error"),
+        //        _("Account data file seems to be invalid"),
+        //        NULL,
+        //        (PurpleNotifyCloseCallback)toxprpl_login,
+        //        acct);
         return;
     }
 
     int fd = open(filename, O_RDONLY | O_BINARY);
     if (fd == -1)
     {
-        purple_notify_message(gc,
-                PURPLE_NOTIFY_MSG_ERROR,
-                _("Error"),
-                _("Could not open account data file:"),
-                strerror(errno),
-                (PurpleNotifyCloseCallback)toxprpl_login,
-                acct);
+        //purple_notify_message(gc,
+        //        PURPLE_NOTIFY_MSG_ERROR,
+        //        _("Error"),
+        //        _("Could not open account data file:"),
+        //        strerror(errno),
+        //        (PurpleNotifyCloseCallback)toxprpl_login,
+        //        acct);
         return;
     }
 
@@ -1260,13 +1322,13 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename)
         ssize_t rb = read(fd, p, remaining);
         if (rb < 0)
         {
-            purple_notify_message(gc,
-                PURPLE_NOTIFY_MSG_ERROR,
-                _("Error"),
-                _("Could not read account data file:"),
-                strerror(errno),
-                (PurpleNotifyCloseCallback)toxprpl_login,
-                acct);
+           // purple_notify_message(gc,
+           //     PURPLE_NOTIFY_MSG_ERROR,
+           //     _("Error"),
+           //     _("Could not read account data file:"),
+           //     strerror(errno),
+           //     (PurpleNotifyCloseCallback)toxprpl_login,
+           //     acct);
             g_free(account_data);
             close(fd);
             return;
@@ -1279,7 +1341,7 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename)
     purple_account_set_string(acct, "messenger", msg64);
     g_free(msg64);
     g_free(account_data);
-    toxprpl_login(acct);
+    //toxprpl_login(acct);
     close(fd);
 }
 
@@ -1303,6 +1365,11 @@ static void toxprpl_user_ask_import(PurpleAccount *acct)
 static void toxprpl_login(PurpleAccount *acct)
 {
     PurpleConnection *gc = purple_account_get_connection(acct);
+    const char *key = purple_account_get_string(acct, "account_path",
+                                          DEFAULT_ACCOUNT_PATH);
+    gchar* filename = g_build_filename(purple_user_dir(), "tox", key, "tox_save.tox", NULL);
+    gchar* dirname = g_path_get_dirname(filename);
+    toxprpl_user_import(acct, filename);
 
     // check if we need to run first time setup
     if (purple_account_get_string(acct, "messenger", NULL) == NULL)
@@ -1317,20 +1384,18 @@ static void toxprpl_login(PurpleAccount *acct)
             PURPLE_DEFAULT_ACTION_NONE,
             acct, NULL, NULL,
             acct, // user data
-            2,    // 2 choices
-            _("Import existing Tox account"),
-            G_CALLBACK(toxprpl_user_ask_import),
+            1,    // 1 choice
             _("Create new Tox account"),
             G_CALLBACK(toxprpl_login_after_setup));
 
-        purple_notify_warning(gc,
-                _("Development Version Warning"),
-                _("This plugin is based on a development version of the "
-                  "Tox library. There has not yet been an alpha nor a beta "
-                  "release, the library is still 'work in progress' in "
-                  "pre-alpha state.\n\n"
-                  "This means that your conversations MAY NOT YET BE "
-                  "SECURE!"), NULL);
+        //purple_notify_warning(gc,
+        //        _("Development Version Warning"),
+        //        _("This plugin is based on a development version of the "
+        //          "Tox library. There has not yet been an alpha nor a beta "
+        //          "release, the library is still 'work in progress' in "
+        //          "pre-alpha state.\n\n"
+        //          "This means that your conversations MAY NOT YET BE "
+        //          "SECURE!"), NULL);
     }
     else
     {
@@ -1939,42 +2004,6 @@ static void toxprpl_xfer_init(PurpleXfer *xfer)
 
 }
 
-/*static gssize toxprpl_xfer_write(const guchar *data, size_t len, PurpleXfer *xfer)
-{
-    purple_debug_info("toxprpl", "xfer_write\n");
-
-    toxprpl_return_val_if_fail(data != NULL, -1);
-    toxprpl_return_val_if_fail(len > 0, -1);
-    toxprpl_return_val_if_fail(xfer != NULL, -1);
-    toxprpl_xfer_data *xfer_data = xfer->data;
-    toxprpl_return_val_if_fail(xfer_data != NULL, -1);
-
-    toxprpl_return_val_if_fail(purple_xfer_get_type(xfer) == PURPLE_XFER_SEND, -1);
-
-    
-    // send chunk
-    
-    
-//     len = MIN((size_t)tox_file_data_size(xfer_data->tox,
-//         xfer_data->friendnumber), len);
-//     int ret = tox_file_send_data(xfer_data->tox, xfer_data->friendnumber,
-//         xfer_data->filenumber, (guchar*)data, len);
-
-//     if (ret != 0)
-//     {
-//         tox_iterate(xfer_data->tox);
-//         return -1;
-//     }
-//     return len;
-    return -1;
-}*/
-
-/*static gssize toxprpl_xfer_read(guchar **data, PurpleXfer *xfer)
-{
-    //dummy callback
-    return -1;
-}*/
-
 static void toxprpl_xfer_free(PurpleXfer *xfer)
 {
     purple_debug_info("toxprpl", "xfer_free\n");
@@ -2276,6 +2305,11 @@ static void toxprpl_init(PurplePlugin *plugin)
     prpl_info.protocol_options = g_list_append(prpl_info.protocol_options,
                                                option);
     purple_debug_info("toxprpl", "initialization complete\n");
+
+    option = purple_account_option_string_new(_("Account path"),
+        "account_path", DEFAULT_ACCOUNT_PATH);
+    prpl_info.protocol_options = g_list_append(prpl_info.protocol_options,
+                                               option);
 }
 
 static PurplePluginInfo info =
