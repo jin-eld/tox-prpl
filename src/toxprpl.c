@@ -148,6 +148,13 @@ typedef struct
     uint8_t *file_id;
 } toxprpl_xfer_data;
 
+typedef struct
+{
+    bool exists;
+    gsize size;
+    guchar* account_data;
+} toxprpl_profile_data;
+
 #define TOXPRPL_MAX_STATUS          4
 #define TOXPRPL_STATUS_ONLINE       0
 #define TOXPRPL_STATUS_AWAY         1
@@ -198,7 +205,7 @@ static PurpleXfer *toxprpl_new_xfer_receive(PurpleConnection *gc,
     const char *who, uint32_t friendnumber, uint32_t filenumber, const goffset filesize,
     const char *filename);
 static void toxprpl_user_export(PurpleConnection *gc, const char *filename);
-static void toxprpl_user_import(PurpleAccount *acct, const char *filename);
+static void toxprpl_user_import(PurpleAccount *acct, const char *filename, toxprpl_profile_data* profile);
 
 // utilitis
 #define PATH_MAX_STRING_SIZE 256
@@ -1135,27 +1142,15 @@ static gboolean toxprpl_save_account(PurpleAccount *account, Tox* tox)
     mkdir_p(dirname, 0777);
     toxprpl_user_export(gc, filename);
 
-    /*uint32_t msg_size = tox_get_savedata_size(tox);
-    if (msg_size > 0)
-    {
-        guchar *msg_data = g_malloc0(msg_size);
-        tox_get_savedata(tox, (uint8_t *)msg_data);
-        gchar *msg64 = g_base64_encode(msg_data, msg_size);
-        purple_account_set_string(account, "messenger", msg64);
-        g_free(msg64);
-        g_free(msg_data);
-        return TRUE;
-    }
-
-    return FALSE;*/
+    return FALSE;
 }
 
-static void toxprpl_login_after_setup(PurpleAccount *acct)
+static void toxprpl_login_after_setup(PurpleAccount *acct, toxprpl_profile_data profile)
 {
     purple_debug_info("toxprpl", "logging in...\n");
 
     PurpleConnection *gc = purple_account_get_connection(acct);
-    
+
     gc->flags |= PURPLE_CONNECTION_NO_FONTSIZE | PURPLE_CONNECTION_NO_URLDESC;
     gc->flags |= PURPLE_CONNECTION_NO_IMAGES | PURPLE_CONNECTION_NO_NEWLINES;
 
@@ -1163,14 +1158,12 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     Tox *tox = tox_new(0, &new_err);
 
     purple_debug_info("toxprpl", "logging in %s\n", acct->username);
-
-    //toxprpl_user_import(acct, "/home/tom/.purple/tox_save.tox");
-    const char *msg64 = purple_account_get_string(acct, "messenger", NULL);
-    if ((msg64 != NULL) && (strlen(msg64) > 0))
+    fprintf(stderr, "toxprpl", "profile location %d\n", profile.account_data);
+    if (profile.exists)
     {
         purple_debug_info("toxprpl", "found existing account data\n");
-        gsize out_len;
-        guchar *msg_data = g_base64_decode(msg64, &out_len);
+        gsize out_len = profile.size;
+        guchar *msg_data = profile.account_data;
         TOX_ERR_OPTIONS_NEW err_back;
         // ToDo: Handle err_back
         struct Tox_Options *options = tox_options_new(&err_back);
@@ -1184,7 +1177,7 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
         options->savedata_type = TOX_SAVEDATA_TYPE_TOX_SAVE;
         options->savedata_length = (uint32_t)out_len;
         options->savedata_data = (uint8_t *)msg_data;
-        
+
         if (msg_data && (out_len > 0))
         {
             TOX_ERR_NEW err_back_new;
@@ -1196,7 +1189,6 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
                                              "for messenger!\n");
                 return;
             }
-            purple_account_set_string(acct, "messenger", NULL);
             g_free(msg_data);
         }
     }
@@ -1299,9 +1291,10 @@ static void toxprpl_login_after_setup(PurpleAccount *acct)
     toxprpl_set_nick_action(gc, nick);
 }
 
-static void toxprpl_user_import(PurpleAccount *acct, const char *filename)
+static void toxprpl_user_import(PurpleAccount *acct, const char *filename, toxprpl_profile_data* profile)
 {
     purple_debug_info("toxprpl", "import user account: %s\n", filename);
+    profile->exists = 0;
 
     PurpleConnection *gc = purple_account_get_connection(acct);
 
@@ -1366,12 +1359,11 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename)
         p = p + rb;
     }
 
-    gchar *msg64 = g_base64_encode(account_data, sb.st_size);
-    purple_account_set_string(acct, "messenger", msg64);
-    g_free(msg64);
-    g_free(account_data);
-    //toxprpl_login(acct);
     close(fd);
+
+    profile->size = sb.st_size;
+    profile->account_data = account_data;
+    profile->exists = 1;
 }
 
 static void toxprpl_user_ask_import(PurpleAccount *acct)
@@ -1398,10 +1390,11 @@ static void toxprpl_login(PurpleAccount *acct)
                                           DEFAULT_ACCOUNT_PATH);
     gchar* filename = g_build_filename(purple_user_dir(), "tox", key, "tox_save.tox", NULL);
     gchar* dirname = g_path_get_dirname(filename);
-    toxprpl_user_import(acct, filename);
+    toxprpl_profile_data profile;
+    toxprpl_user_import(acct, filename, &profile);
 
     // check if we need to run first time setup
-    if (purple_account_get_string(acct, "messenger", NULL) == NULL)
+    if (!profile.exists)
     {
         purple_request_action(gc,
             _("Setup Tox account"),
@@ -1428,7 +1421,7 @@ static void toxprpl_login(PurpleAccount *acct)
     }
     else
     {
-        toxprpl_login_after_setup(acct);
+        toxprpl_login_after_setup(acct, profile);
     }
 }
 
@@ -1460,10 +1453,7 @@ static void toxprpl_close(PurpleConnection *gc)
     purple_cmd_unregister(plugin->myid_command_id);
     purple_cmd_unregister(plugin->nick_command_id);
 
-    if (!toxprpl_save_account(account, plugin->tox))
-    {
-        purple_account_set_string(account, "messenger", "");
-    }
+    toxprpl_save_account(account, plugin->tox);
 
     purple_debug_info("toxprpl", "shutting down\n");
     purple_connection_set_protocol_data(gc, NULL);
