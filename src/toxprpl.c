@@ -208,7 +208,7 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename, toxpr
 // utilitis
 #define PATH_MAX_STRING_SIZE 256
 
-void toxprpl_err_friend_add(TOX_ERR_FRIEND_ADD err) {
+void toxprpl_err_friend_add(TOX_ERR_FRIEND_ADD err, PurpleConnection *gc) {
   const char* msg;
   switch (err) {
     case TOX_ERR_FRIEND_ADD_NULL:
@@ -240,7 +240,7 @@ void toxprpl_err_friend_add(TOX_ERR_FRIEND_ADD err) {
   purple_notify_error(gc, _("Error"), msg, NULL);
 }
 
-void toxprpl_err_file_control(TOX_ERR_FILE_CONTROL err) {
+void toxprpl_err_file_control(TOX_ERR_FILE_CONTROL err, PurpleConnection* gc) {
   const char* msg;
   switch (err) {
       case TOX_ERR_FILE_CONTROL_FRIEND_NOT_FOUND:
@@ -684,17 +684,17 @@ static void on_file_recv(Tox *tox, uint32_t friendnumber,
     purple_debug_info("toxprpl", "file_send_request: %i %i\n", friendnumber,
         filenumber);
 
+    PurpleConnection *gc = userdata;
+
     // TCS: Avatar 2.3.2
     // As we do not support avatars, we cancel the file as soon as possible.
     if(kind == TOX_FILE_KIND_AVATAR) {
       TOX_ERR_FILE_CONTROL err_back;
       tox_file_control(tox, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
       if(err_back != TOX_ERR_FILE_CONTROL_OK) {
-        toxprpl_err_file_control(err_back);
+        toxprpl_err_file_control(err_back, gc);
       }
     }
-
-    PurpleConnection *gc = userdata;
 
     toxprpl_return_if_fail(gc != NULL);
     toxprpl_return_if_fail(filename != NULL);
@@ -1484,7 +1484,7 @@ static int toxprpl_tox_add_friend(Tox *tox, PurpleConnection *gc,
     g_free(bin_key);
 
     if(ret != TOX_ERR_FRIEND_ADD_OK) {
-        toxprpl_err_friend_add(ret);
+        toxprpl_err_friend_add(ret, gc);
     } else {
         purple_debug_info("toxprpl", "Friend %s added as %d\n", buddy_key, ret);
         // save account so buddy is not lost in case pidgin does not exit
@@ -1846,10 +1846,16 @@ static void toxprpl_xfer_init(PurpleXfer *xfer)
         purple_debug_info("toxprpl", "sending recv control for file '%s' %d %d.\n",
             filename, xfer_data->friendnumber, xfer_data->filenumber);
 
+        PurpleAccount *account = purple_xfer_get_account(xfer);
+        toxprpl_return_if_fail(account != NULL);
+
+        PurpleConnection *gc = purple_account_get_connection(account);
+        toxprpl_return_if_fail(gc != NULL);
+
         tox_file_control(xfer_data->tox, xfer_data->friendnumber,
             xfer_data->filenumber, TOX_FILE_CONTROL_RESUME, &err_back);
         if (err_back != TOX_ERR_FILE_CONTROL_OK) {
-          toxprpl_err_file_control(err_back);
+          toxprpl_err_file_control(err_back, gc);
           return;
         }
 
@@ -1883,12 +1889,18 @@ static void toxprpl_xfer_cancel_send(PurpleXfer *xfer)
 
     toxprpl_xfer_data *xfer_data = xfer->data;
 
+    PurpleAccount *account = purple_xfer_get_account(xfer);
+    toxprpl_return_if_fail(account != NULL);
+
+    PurpleConnection *gc = purple_account_get_connection(account);
+    toxprpl_return_if_fail(gc != NULL);
+
     if (xfer_data->tox != NULL)
     {
       TOX_ERR_FILE_CONTROL err_back;
       tox_file_control(xfer_data->tox, xfer_data->friendnumber, xfer_data->filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
       if(err_back != TOX_ERR_FILE_CONTROL_OK) {
-        toxprpl_err_file_control(err_back);
+        toxprpl_err_file_control(err_back, gc);
       }
     }
     toxprpl_xfer_free(xfer);
@@ -1900,12 +1912,18 @@ static void toxprpl_xfer_cancel_recv(PurpleXfer *xfer)
     toxprpl_return_if_fail(xfer != NULL);
     toxprpl_xfer_data *xfer_data = xfer->data;
 
+    PurpleAccount *account = purple_xfer_get_account(xfer);
+    toxprpl_return_if_fail(account != NULL);
+
+    PurpleConnection *gc = purple_account_get_connection(account);
+    toxprpl_return_if_fail(gc != NULL);
+
     if (xfer_data->tox != NULL)
     {
       TOX_ERR_FILE_CONTROL err_back;
       tox_file_control(xfer_data->tox, xfer_data->friendnumber, xfer_data->filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
       if(err_back != TOX_ERR_FILE_CONTROL_OK) {
-        toxprpl_err_file_control(err_back);
+        toxprpl_err_file_control(err_back, gc);
       }
     }
     toxprpl_xfer_free(xfer);
@@ -1917,13 +1935,19 @@ static void toxprpl_xfer_request_denied(PurpleXfer *xfer)
     toxprpl_return_if_fail(xfer != NULL);
     toxprpl_return_if_fail(xfer->data != NULL);
 
+    PurpleAccount *account = purple_xfer_get_account(xfer);
+    toxprpl_return_if_fail(account != NULL);
+
+    PurpleConnection *gc = purple_account_get_connection(account);
+    toxprpl_return_if_fail(gc != NULL);
+
     toxprpl_xfer_data *xfer_data = xfer->data;
     if (xfer_data->tox != NULL)
     {
       TOX_ERR_FILE_CONTROL err_back;
       tox_file_control(xfer_data->tox, xfer_data->friendnumber, xfer_data->filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
       if(err_back != TOX_ERR_FILE_CONTROL_OK) {
-        toxprpl_err_file_control(err_back);
+        toxprpl_err_file_control(err_back, gc);
       }
     }
     toxprpl_xfer_free(xfer);
