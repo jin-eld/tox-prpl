@@ -208,24 +208,59 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename, toxpr
 // utilitis
 #define PATH_MAX_STRING_SIZE 256
 
+void toxprpl_err_friend_add(TOX_ERR_FRIEND_ADD err) {
+  const char* msg;
+  switch (err) {
+    case TOX_ERR_FRIEND_ADD_NULL:
+      msg = "One of the arguments to the function was NULL when it was not expected.";
+      break;
+    case TOX_ERR_FRIEND_ADD_TOO_LONG:
+      msg = "The length of the friend request message exceeded TOX_MAX_FRIEND_REQUEST_LENGTH.";
+      break;
+    case TOX_ERR_FRIEND_ADD_NO_MESSAGE:
+      msg = "The friend request message was empty.";
+      break;
+    case TOX_ERR_FRIEND_ADD_OWN_KEY:
+      msg = "The friend address belongs to the sending client.";
+      break;
+    case TOX_ERR_FRIEND_ADD_ALREADY_SENT:
+      msg = "A friend request has already been sent, or you already have this account on your friends list.";
+      break;
+    case TOX_ERR_FRIEND_ADD_BAD_CHECKSUM:
+      msg = "The friend address checksum failed.";
+      break;
+    case TOX_ERR_FRIEND_ADD_SET_NEW_NOSPAM:
+      msg = "The friend was already there, but the nospam value was different.";
+      break;
+    case TOX_ERR_FRIEND_ADD_MALLOC:
+      msg = "A memory allocation failed when trying to increase the friends list size.";
+      break;
+  }
+
+  purple_notify_error(gc, _("Error"), msg, NULL);
+}
+
 void toxprpl_err_file_control(TOX_ERR_FILE_CONTROL err) {
-    switch (err) {
-        case TOX_ERR_FILE_CONTROL_FRIEND_NOT_FOUND:
-            purple_debug_info("toxprpl", "File transfer failed: Friend not found.");
-            return;
-        case TOX_ERR_FILE_CONTROL_FRIEND_NOT_CONNECTED:
-            purple_debug_info("toxprpl", "File transfer failed: Friend is not online.");
-            return;
-        case TOX_ERR_FILE_CONTROL_NOT_FOUND:
-            purple_debug_info("toxprpl", "File transfer failed: Invalid filenumber.");
-            return;
-        case TOX_ERR_FILE_CONTROL_SENDQ:
-            purple_debug_info("toxprpl", "File transfer failed: Connection error.");
-            return;
-        default:
-            purple_debug_info("toxprpl", "File transfer failed (error %d)\n", err);
-            return;
-    }
+  const char* msg;
+  switch (err) {
+      case TOX_ERR_FILE_CONTROL_FRIEND_NOT_FOUND:
+          msg = "File transfer failed: Friend not found.";
+          break;
+      case TOX_ERR_FILE_CONTROL_FRIEND_NOT_CONNECTED:
+          msg = "File transfer failed: Friend is not online.";
+          break;
+      case TOX_ERR_FILE_CONTROL_NOT_FOUND:
+          msg = "File transfer failed: Invalid filenumber.";
+          break;
+      case TOX_ERR_FILE_CONTROL_SENDQ:
+          msg = "File transfer failed: Connection error.";
+          break;
+      default:
+          msg = "File transfer failed: Other error.";
+          break;
+  }
+
+  purple_notify_error(gc, _("Error"), msg, NULL);
 }
 
 // returned buffer must be freed by the caller
@@ -405,7 +440,7 @@ static void on_incoming_message(Tox *tox, uint32_t friendnum,
                                 size_t length, void *user_data)
 {
   // ToDo: Review if/else for overlapping content
-  
+
   if (type == TOX_MESSAGE_TYPE_NORMAL)
   {
     purple_debug_info("toxprpl", "Message received!\n");
@@ -654,7 +689,9 @@ static void on_file_recv(Tox *tox, uint32_t friendnumber,
     if(kind == TOX_FILE_KIND_AVATAR) {
       TOX_ERR_FILE_CONTROL err_back;
       tox_file_control(tox, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
-      toxprpl_err_file_control(err_back);
+      if(err_back != TOX_ERR_FILE_CONTROL_OK) {
+        toxprpl_err_file_control(err_back);
+      }
     }
 
     PurpleConnection *gc = userdata;
@@ -1435,55 +1472,20 @@ static int toxprpl_tox_add_friend(Tox *tox, PurpleConnection *gc,
             message = DEFAULT_REQUEST_MESSAGE;
         }
         TOX_ERR_FRIEND_ADD err_back_add;
-        // ToDo: Handle err_back
         ret = tox_friend_add(tox, bin_key, (uint8_t *)message,
                             (uint16_t)strlen(message) + 1, &err_back_add);
     }
     else
     {
         TOX_ERR_FRIEND_ADD err_back_add;
-        //ToDo: Handle err_back
         ret = tox_friend_add_norequest(tox, bin_key, &err_back_add);
     }
 
     g_free(bin_key);
-    const char *msg;
-//     switch (ret)
-//     {
-//         case TOX_FAERR_TOOLONG:
-//             msg = "Message too long";
-//             break;
-//         case TOX_FAERR_NOMESSAGE:
-//             msg = "Missing request message";
-//             break;
-//         case TOX_FAERR_OWNKEY:
-//             msg = "You're trying to add yourself as a friend";
-//             break;
-//         case TOX_FAERR_ALREADYSENT:
-//             msg = "Friend request already sent";
-//             break;
-//         case TOX_FAERR_BADCHECKSUM:
-//             msg = "Can't add friend: bad checksum in ID";
-//             break;
-//         case TOX_FAERR_SETNEWNOSPAM:
-//             msg = "Can't add friend: wrong nospam ID";
-//             break;
-//         case TOX_FAERR_NOMEM:
-//             msg = "Could not allocate memory for friendlist";
-//             break;
-//         case TOX_FAERR_UNKNOWN:
-//             msg = "Error adding friend";
-//             break;
-//         default:
-//             break;
-//     }
 
-    if (ret < 0)
-    {
-        purple_notify_error(gc, _("Error"), msg, NULL);
-    }
-    else
-    {
+    if(ret != TOX_ERR_FRIEND_ADD_OK) {
+        toxprpl_err_friend_add(ret);
+    } else {
         purple_debug_info("toxprpl", "Friend %s added as %d\n", buddy_key, ret);
         // save account so buddy is not lost in case pidgin does not exit
         // cleanly
@@ -1846,7 +1848,6 @@ static void toxprpl_xfer_init(PurpleXfer *xfer)
 
         tox_file_control(xfer_data->tox, xfer_data->friendnumber,
             xfer_data->filenumber, TOX_FILE_CONTROL_RESUME, &err_back);
-        //ToDo Parse error message
         if (err_back != TOX_ERR_FILE_CONTROL_OK) {
           toxprpl_err_file_control(err_back);
           return;
@@ -1886,8 +1887,9 @@ static void toxprpl_xfer_cancel_send(PurpleXfer *xfer)
     {
       TOX_ERR_FILE_CONTROL err_back;
       tox_file_control(xfer_data->tox, xfer_data->friendnumber, xfer_data->filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
-      toxprpl_err_file_control(err_back);
-
+      if(err_back != TOX_ERR_FILE_CONTROL_OK) {
+        toxprpl_err_file_control(err_back);
+      }
     }
     toxprpl_xfer_free(xfer);
 }
@@ -1902,7 +1904,9 @@ static void toxprpl_xfer_cancel_recv(PurpleXfer *xfer)
     {
       TOX_ERR_FILE_CONTROL err_back;
       tox_file_control(xfer_data->tox, xfer_data->friendnumber, xfer_data->filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
-      toxprpl_err_file_control(err_back);
+      if(err_back != TOX_ERR_FILE_CONTROL_OK) {
+        toxprpl_err_file_control(err_back);
+      }
     }
     toxprpl_xfer_free(xfer);
 }
@@ -1918,7 +1922,9 @@ static void toxprpl_xfer_request_denied(PurpleXfer *xfer)
     {
       TOX_ERR_FILE_CONTROL err_back;
       tox_file_control(xfer_data->tox, xfer_data->friendnumber, xfer_data->filenumber, TOX_FILE_CONTROL_CANCEL, &err_back);
-      toxprpl_err_file_control(err_back);
+      if(err_back != TOX_ERR_FILE_CONTROL_OK) {
+        toxprpl_err_file_control(err_back);
+      }
     }
     toxprpl_xfer_free(xfer);
 }
