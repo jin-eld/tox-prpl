@@ -1,5 +1,12 @@
 Tox Protocol Plugin For Pidgin / libpurple
 
+v0.5.0  08.09.2016
+        * updated to latest tox core API
+        * fixed file transfers for the time being
+        * auto-cancel avatar file transfers
+        * using save file now ~/.purple/tox/<account_path>/tox_save.tox
+        * buddy requests use the standard purple interface
+
 v0.4.2	29.09.2014
 	* synted with latest tox core API
 	* fixed NSIS installer script
