@@ -1077,7 +1077,7 @@ static gboolean toxprpl_save_account(PurpleAccount *account, Tox* tox)
     g_mkdir_with_parents(dirname, 0777);
     toxprpl_user_export(gc, filename);
 
-    return FALSE;
+    return TRUE;
 }
 
 static void toxprpl_login_after_setup(PurpleAccount *acct, toxprpl_profile_data profile)
@@ -1233,41 +1233,30 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename, toxpr
 
     PurpleConnection *gc = purple_account_get_connection(acct);
 
+    // We return invalid profile if the file can't be accessed
     GStatBuf sb;
     if (g_stat(filename, &sb) != 0)
     {
-        //purple_notify_message(gc,
-        //        PURPLE_NOTIFY_MSG_ERROR,
-        //        _("Error"),
-        //        _("Could not access account data file:"),
-        //        filename,
-        //        (PurpleNotifyCloseCallback)toxprpl_login,
-        //        acct);
         return;
     }
 
+    // We return error message if the size is wrong
     if ((sb.st_size == 0) || (sb.st_size > MAX_ACCOUNT_DATA_SIZE))
     {
-        //purple_notify_message(gc,
-        //        PURPLE_NOTIFY_MSG_ERROR,
-        //        _("Error"),
-        //        _("Account data file seems to be invalid"),
-        //        NULL,
-        //        (PurpleNotifyCloseCallback)toxprpl_login,
-        //        acct);
+        purple_notify_message(gc,
+                PURPLE_NOTIFY_MSG_ERROR,
+                _("Error"),
+                _("Account data file seems to be invalid"),
+                NULL,
+                (PurpleNotifyCloseCallback)toxprpl_login,
+                acct);
         return;
     }
 
+    // We return invalid profile if the file can't be found
     int fd = open(filename, O_RDONLY | O_BINARY);
     if (fd == -1)
     {
-        //purple_notify_message(gc,
-        //        PURPLE_NOTIFY_MSG_ERROR,
-        //        _("Error"),
-        //        _("Could not open account data file:"),
-        //        strerror(errno),
-        //        (PurpleNotifyCloseCallback)toxprpl_login,
-        //        acct);
         return;
     }
 
@@ -1276,16 +1265,17 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename, toxpr
     size_t remaining = sb.st_size;
     while (remaining > 0)
     {
+        // We return error message if file exists and can't be read
         ssize_t rb = read(fd, p, remaining);
         if (rb < 0)
         {
-           // purple_notify_message(gc,
-           //     PURPLE_NOTIFY_MSG_ERROR,
-           //     _("Error"),
-           //     _("Could not read account data file:"),
-           //     strerror(errno),
-           //     (PurpleNotifyCloseCallback)toxprpl_login,
-           //     acct);
+             purple_notify_message(gc,
+                 PURPLE_NOTIFY_MSG_ERROR,
+                 _("Error"),
+                 _("Could not read account data file:"),
+                 strerror(errno),
+                 (PurpleNotifyCloseCallback)toxprpl_login,
+                 acct);
             g_free(account_data);
             close(fd);
             return;
@@ -1296,26 +1286,10 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename, toxpr
 
     close(fd);
 
+    // File was read successfully
     profile->size = sb.st_size;
     profile->account_data = account_data;
     profile->exists = 1;
-}
-
-static void toxprpl_user_ask_import(PurpleAccount *acct)
-{
-    purple_debug_info("toxprpl", "ask to import user account\n");
-    PurpleConnection *gc = purple_account_get_connection(acct);
-
-    purple_request_file(gc,
-        _("Import existing Tox account data"),
-        NULL,
-        FALSE,
-        G_CALLBACK(toxprpl_user_import),
-        G_CALLBACK(toxprpl_login),
-        acct,
-        NULL,
-        NULL,
-        acct);
 }
 
 static void toxprpl_login(PurpleAccount *acct)
@@ -1344,15 +1318,6 @@ static void toxprpl_login(PurpleAccount *acct)
             1,    // 1 choice
             _("Create new Tox account"),
             G_CALLBACK(toxprpl_login_after_setup));
-
-        //purple_notify_warning(gc,
-        //        _("Development Version Warning"),
-        //        _("This plugin is based on a development version of the "
-        //          "Tox library. There has not yet been an alpha nor a beta "
-        //          "release, the library is still 'work in progress' in "
-        //          "pre-alpha state.\n\n"
-        //          "This means that your conversations MAY NOT YET BE "
-        //          "SECURE!"), NULL);
     }
     else
     {
@@ -1644,12 +1609,7 @@ static void toxprpl_user_export(PurpleConnection *gc, const char *filename)
     purple_debug_info("toxprpl", "export account to %s\n", filename);
 
     toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
-    if (plugin == NULL)
-    {
-        return;
-    }
-
-    if (plugin->tox == NULL)
+    if (plugin == NULL || plugin->tox == NULL)
     {
         return;
     }
