@@ -1754,8 +1754,12 @@ static gboolean toxprpl_can_receive_file(PurpleConnection *gc, const char *who)
     toxprpl_return_val_if_fail(buddy_data != NULL, FALSE);
 
     TOX_ERR_FRIEND_QUERY err_back;
-    return tox_friend_get_connection_status(plugin->tox,
-        buddy_data->tox_friendlist_number, &err_back) == 1;
+    int status = tox_friend_get_connection_status(plugin->tox,
+        buddy_data->tox_friendlist_number, &err_back);
+
+    purple_debug_info("toxprpl", "can_receive_file_info %d with status %d\n", buddy_data->tox_friendlist_number, status);
+
+    return status != TOX_CONNECTION_NONE;
 }
 
 static gboolean toxprpl_xfer_idle_write(toxprpl_idle_write_data *data)
