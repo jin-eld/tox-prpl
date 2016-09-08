@@ -208,55 +208,6 @@ static void toxprpl_user_import(PurpleAccount *acct, const char *filename, toxpr
 // utilitis
 #define PATH_MAX_STRING_SIZE 256
 
-/* recursive mkdir */
-int mkdir_p(const char *dir, const mode_t mode) {
-    char tmp[PATH_MAX_STRING_SIZE];
-    char *p = NULL;
-    struct stat sb;
-    size_t len;
-
-    /* copy path */
-    strncpy(tmp, dir, sizeof(tmp));
-    len = strlen(tmp);
-    if (len >= sizeof(tmp)) {
-        return -1;
-    }
-
-    /* remove trailing slash */
-    if(tmp[len - 1] == '/') {
-        tmp[len - 1] = 0;
-    }
-
-    /* recursive mkdir */
-    for(p = tmp + 1; *p; p++) {
-        if(*p == '/') {
-            *p = 0;
-            /* test path */
-            if (stat(tmp, &sb) != 0) {
-                /* path does not exist - create directory */
-                if (mkdir(tmp, mode) < 0) {
-                    return -1;
-                }
-            } else if (!S_ISDIR(sb.st_mode)) {
-                /* not a directory */
-                return -1;
-            }
-            *p = '/';
-        }
-    }
-    /* test path */
-    if (stat(tmp, &sb) != 0) {
-        /* path does not exist - create directory */
-        if (mkdir(tmp, mode) < 0) {
-            return -1;
-        }
-    } else if (!S_ISDIR(sb.st_mode)) {
-        /* not a directory */
-        return -1;
-    }
-    return 0;
-}
-
 void toxprpl_err_file_control(TOX_ERR_FILE_CONTROL err) {
     switch (err) {
         case TOX_ERR_FILE_CONTROL_FRIEND_NOT_FOUND:
@@ -1123,7 +1074,7 @@ static gboolean toxprpl_save_account(PurpleAccount *account, Tox* tox)
                                           DEFAULT_ACCOUNT_PATH);
     gchar* filename = g_build_filename(purple_user_dir(), "tox", key, "tox_save.tox", NULL);
     gchar* dirname = g_path_get_dirname(filename);
-    mkdir_p(dirname, 0777);
+    g_mkdir_with_parents(dirname, 0777);
     toxprpl_user_export(gc, filename);
 
     return FALSE;
