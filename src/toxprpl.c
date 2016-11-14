@@ -77,7 +77,7 @@
 #define _(msg) msg // might add gettext later
 
 #define TOX_ID_SIZE 64
-#define TOXPRPL_ID "prpl-tom-tox"
+#define TOXPRPL_ID "prpl-jin_eld-tox"
 #define DEFAULT_SERVER_KEY "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074"
 #define DEFAULT_SERVER_PORT 33445
 #define DEFAULT_SERVER_IP   "tox.zodiaclabs.org"
