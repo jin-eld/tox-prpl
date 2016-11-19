@@ -1804,7 +1804,7 @@ static void toxprpl_xfer_init(PurpleXfer *xfer)
         TOX_ERR_FILE_SEND err_back;
         // ToDo maybe parsing the file kind before is necessary
         int filenumber = tox_file_send(plugin->tox, friendnumber, TOX_FILE_KIND_DATA, filesize, NULL, 
-                       filename, strlen(filename) + 1, &err_back);
+                       (const uint8_t *)filename, strlen(filename) + 1, &err_back);
         // ToDo: Handle err_back
         toxprpl_return_if_fail(filenumber >= 0);
 
