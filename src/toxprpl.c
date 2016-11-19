@@ -410,7 +410,6 @@ static void on_request(struct Tox *tox, const uint8_t *public_key,
                        const uint8_t *data, size_t length, void *user_data)
 {
     purple_debug_info("toxprpl", "incoming friend request!\n");
-    gchar *dialog_message;
     PurpleConnection *gc = (PurpleConnection *)user_data;
 
     gchar *buddy_key = toxprpl_tox_bin_id_to_string(public_key);
@@ -434,7 +433,6 @@ static void on_request(struct Tox *tox, const uint8_t *public_key,
     }
 
     purple_account_request_authorization(account, buddy_key, NULL, NULL, NULL, 0, NULL, NULL, NULL);
-    g_free(dialog_message);
     g_free(request_msg);
 }
 
