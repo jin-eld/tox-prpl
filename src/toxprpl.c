@@ -392,7 +392,7 @@ static void on_connectionstatus(Tox *tox, uint32_t fnum, TOX_CONNECTION status,
     uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
     TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
     // ToDo: Hanndle err_back
-    if (tox_friend_get_public_key(tox, fnum, public_key, &err_back) < 0)
+    if (tox_friend_get_public_key(tox, fnum, public_key, &err_back) != true)
     {
         purple_debug_info("toxprpl", "Could not get id of friend #%d\n",
                           fnum);
@@ -453,7 +453,7 @@ static void on_incoming_message(Tox *tox, uint32_t friendnum,
     uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
     TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
     // ToDo: Hanndle err_back
-    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) < 0)
+    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) != true)
     {
         purple_debug_info("toxprpl", "Could not get id of friend %d\n",
                           friendnum);
@@ -475,7 +475,7 @@ static void on_incoming_message(Tox *tox, uint32_t friendnum,
     uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
     TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
     //ToDo: Handle err_back
-    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) < 0)
+    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) != true )
     {
         purple_debug_info("toxprpl", "Could not get id of friend %d\n",
                           friendnum);
@@ -505,7 +505,7 @@ static void on_nick_change(Tox *tox, uint32_t friendnum, const uint8_t *data,
     uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
     TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
     // ToDo: Hanndle err_back
-    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) < 0)
+    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) != true)
     {
         purple_debug_info("toxprpl", "Could not get id of friend %d\n",
                           friendnum);
@@ -536,7 +536,7 @@ static void on_status_change(struct Tox *tox, uint32_t friendnum,
     uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
     TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
     // ToDo: Hanndle err_back
-    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) < 0)
+    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) != true)
     {
         purple_debug_info("toxprpl", "Could not get id of friend %d\n",
                           friendnum);
@@ -707,7 +707,7 @@ static void on_file_recv(Tox *tox, uint32_t friendnumber,
     uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
     TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
     // ToDo: Hanndle err_back
-    if (tox_friend_get_public_key(tox, friendnumber, public_key, &err_back) < 0)
+    if (tox_friend_get_public_key(tox, friendnumber, public_key, &err_back) != true)
     {
         purple_debug_info("toxprpl", "Could not get id of friend %d\n",
                           friendnumber);
@@ -741,7 +741,7 @@ static void on_typing_change(Tox *tox, uint32_t friendnum, bool is_typing,
     uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
     TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
     // ToDo: Hanndle err_back
-    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) < 0)
+    if (tox_friend_get_public_key(tox, friendnum, public_key, &err_back) != true)
     {
         purple_debug_info("toxprpl", "Could not get id of friend %d\n",
                           friendnum);
@@ -996,7 +996,7 @@ static void toxprpl_sync_add_buddy(PurpleAccount *account, Tox *tox,
     uint8_t public_key[TOX_PUBLIC_KEY_SIZE];
     TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back_key;
     // ToDo: Hanndle err_back
-    if (tox_friend_get_public_key(tox, friend_number, public_key, &err_back_key) < 0)
+    if (tox_friend_get_public_key(tox, friend_number, public_key, &err_back_key) != true)
     {
         purple_debug_info("toxprpl", "Could not get id of friend #%d\n",
                           friend_number);
