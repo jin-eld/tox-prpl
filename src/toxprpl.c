@@ -1812,10 +1812,10 @@ static void toxprpl_xfer_init(PurpleXfer *xfer)
         xfer_data->friendnumber = buddy_data->tox_friendlist_number;
         xfer_data->filenumber = filenumber;
         
-        TOX_ERR_FILE_GET* err_file_get;
+        TOX_ERR_FILE_GET err_file_get;
         // ToDo: Return type is bool
         tox_file_get_file_id(plugin->tox, friendnumber, filenumber, xfer_data->file_id,
-                          err_file_get);
+                          &err_file_get);
         //ToDo: Handle err_file_get
     }
     else if (purple_xfer_get_type(xfer) == PURPLE_XFER_RECEIVE)
