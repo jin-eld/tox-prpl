@@ -1046,7 +1046,7 @@ static void toxprpl_sync_friends(PurpleAccount *acct, Tox *tox)
     uint32_t i;
 
     uint32_t fl_len = tox_self_get_friend_list_size(tox);
-    int *friendlist = g_malloc0(fl_len * sizeof(int));
+    uint32_t *friendlist = g_malloc0(fl_len * sizeof(uint32_t));
 
     if (fl_len != 0)
     {
@@ -1057,7 +1057,7 @@ static void toxprpl_sync_friends(PurpleAccount *acct, Tox *tox)
         for (i = 0; i < fl_len; i++)
         {
             iterator = buddies;
-            int fnum = friendlist[i];
+            uint32_t fnum = friendlist[i];
             uint8_t bin_id[TOX_PUBLIC_KEY_SIZE];
             TOX_ERR_FRIEND_GET_PUBLIC_KEY err_back;
             // ToDo: Hanndle err_back
