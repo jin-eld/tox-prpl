@@ -666,7 +666,6 @@ static void on_file_control(Tox *tox, uint32_t friendnumber,
                             uint32_t filenumber, TOX_FILE_CONTROL control_type, 
                             void *userdata)
 {
-    fprintf(stderr, "toxprpl: file control type: %d\n", control_type);
     PurpleConnection *gc = userdata;
     toxprpl_return_if_fail(gc != NULL);
 
@@ -1137,7 +1136,6 @@ static void toxprpl_login_after_setup(PurpleAccount *acct, toxprpl_profile_data 
     Tox *tox = tox_new(0, &new_err);
 
     purple_debug_info("toxprpl", "logging in %s\n", acct->username);
-    fprintf(stderr, "toxprpl", "profile location %d\n", profile.account_data);
     if (profile.exists)
     {
         purple_debug_info("toxprpl", "found existing account data\n");
@@ -1506,7 +1504,7 @@ static int toxprpl_tox_add_friend(Tox *tox, PurpleConnection *gc,
 static void toxprpl_add_buddy(PurpleConnection *gc, PurpleBuddy *buddy,
         PurpleGroup *group, const char *msg)
 {
-    purple_debug_info("toxprpl", "adding %s to buddy list with length %d\n", buddy->name, strlen(buddy->name));
+    purple_debug_info("toxprpl", "adding %s to buddy list with length %zu\n", buddy->name, strlen(buddy->name));
     toxprpl_plugin_data *plugin = purple_connection_get_protocol_data(gc);
 
     buddy->name = g_strstrip(buddy->name);
