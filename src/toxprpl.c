@@ -677,6 +677,9 @@ static void on_file_control(Tox *tox, uint32_t friendnumber,
       case TOX_FILE_CONTROL_CANCEL:
         purple_xfer_cancel_remote(xfer);
         break;
+      default:
+        /* TODO: handle TOX_FILE_CONTROL_RESUME and TOX_FILE_CONTROL_PAUSE */
+        break;
     }
 }
 
