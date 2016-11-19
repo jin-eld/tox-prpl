@@ -1340,7 +1340,6 @@ static void toxprpl_login(PurpleAccount *acct)
     const char *key = purple_account_get_string(acct, "account_path",
                                           DEFAULT_ACCOUNT_PATH);
     gchar* filename = g_build_filename(purple_user_dir(), "tox", key, "tox_save.tox", NULL);
-    gchar* dirname = g_path_get_dirname(filename);
     toxprpl_profile_data profile;
     toxprpl_user_import(acct, filename, &profile);
 
@@ -1767,36 +1766,6 @@ static gboolean toxprpl_can_receive_file(PurpleConnection *gc, const char *who)
     return status != TOX_CONNECTION_NONE;
 }
 
-static gboolean toxprpl_xfer_idle_write(toxprpl_idle_write_data *data)
-{
-    toxprpl_return_val_if_fail(data != NULL, FALSE);
-    // If running is false the transfer was stopped and data->xfer
-    // may have been deleted already
-    if (data->running != FALSE)
-    {
-        size_t bytes_remaining = purple_xfer_get_bytes_remaining(data->xfer);
-        if (data->xfer != NULL &&
-            bytes_remaining > 0 &&
-            !purple_xfer_is_canceled(data->xfer))
-        {
-            gssize wrote = purple_xfer_write(data->xfer, data->offset, bytes_remaining);
-            if (wrote > 0)
-            {
-                purple_xfer_set_bytes_sent(data->xfer, data->offset - data->buffer + wrote);
-                purple_xfer_update_progress(data->xfer);
-                data->offset += wrote;
-            }
-            return TRUE;
-        }
-        purple_debug_info("toxprpl", "ending file transfer\n");
-        purple_xfer_end(data->xfer);
-    }
-    purple_debug_info("toxprpl", "freeing buffer\n");
-    g_free(data->buffer);
-    g_free(data);
-    return FALSE;
-}
-
 static void toxprpl_xfer_init(PurpleXfer *xfer)
 {
    TOX_ERR_FILE_CONTROL err_back;
@@ -1966,8 +1935,6 @@ static void toxprpl_xfer_end(PurpleXfer *xfer)
 {
     purple_debug_info("toxprpl", "xfer_end\n");
     toxprpl_return_if_fail(xfer != NULL);
-    toxprpl_xfer_data *xfer_data = xfer->data;
-
     toxprpl_xfer_free(xfer);
 }
 
