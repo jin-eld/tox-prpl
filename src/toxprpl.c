@@ -235,9 +235,13 @@ void toxprpl_err_friend_add(TOX_ERR_FRIEND_ADD err, PurpleConnection *gc) {
     case TOX_ERR_FRIEND_ADD_MALLOC:
       msg = "A memory allocation failed when trying to increase the friends list size.";
       break;
+    default:
+      break;
   }
-
-  purple_notify_error(gc, _("Error"), msg, NULL);
+  if (err != TOX_ERR_FRIEND_ADD_OK)
+  {
+    purple_notify_error(gc, _("Error"), msg, NULL);
+  }
 }
 
 void toxprpl_err_file_control(TOX_ERR_FILE_CONTROL err, PurpleConnection* gc) {
