@@ -731,10 +731,9 @@ static void on_file_recv(Tox *tox, uint32_t friendnumber,
         TOX_ERR_FILE_CONTROL err_back;
         tox_file_control(tox, friendnumber, filenumber, TOX_FILE_CONTROL_CANCEL,
                          &err_back);
-        if (err_back != TOX_ERR_FILE_CONTROL_OK)
-        {
-            toxprpl_err_file_control(err_back, gc);
-        }
+        // we really don't care about the return code from tox_file_control
+        // since we wanted to cancel the transfer anyway
+        return;
     }
 
     toxprpl_return_if_fail(gc != NULL);
