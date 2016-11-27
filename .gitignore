@@ -40,7 +40,9 @@ libtool
 
 .deps
 .libs
+.dirstamp
 
+compile
 config.sub
 config.guess
 install-sh
