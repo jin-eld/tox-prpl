@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.66])
-AC_INIT([tox-prpl], [0.4.2], [jin@mediatomb.cc],[], [http://tox.dhs.org/])
+AC_INIT([tox-prpl], [0.5.1], [jin@mediatomb.cc],[], [http://tox.dhs.org/])
 AC_CONFIG_SRCDIR([src/toxprpl.c])
 AC_CONFIG_HEADERS([autoconfig.h])
 AM_INIT_AUTOMAKE([1.10 -Wall subdir-objects])
