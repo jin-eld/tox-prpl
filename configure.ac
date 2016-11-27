@@ -5,7 +5,7 @@ AC_PREREQ([2.66])
 AC_INIT([tox-prpl], [0.4.2], [jin@mediatomb.cc],[], [http://tox.dhs.org/])
 AC_CONFIG_SRCDIR([src/toxprpl.c])
 AC_CONFIG_HEADERS([autoconfig.h])
-AM_INIT_AUTOMAKE([1.10 -Wall])
+AM_INIT_AUTOMAKE([1.10 -Wall subdir-objects])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_CONFIG_MACRO_DIR([m4])
 

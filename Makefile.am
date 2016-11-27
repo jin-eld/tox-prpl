@@ -1,11 +1,10 @@
 SUBDIRS=build pixmaps
 
 ACLOCAL_AMFLAGS = -I m4
-AUTOMAKE_OPTIONS = subdir-objects
 
 BUILT_SOURCES = $(top_builddir)/nsis/tox-prpl.nsi
 CLEANFILES = $(top_builddir)/nsis/tox-prpl.nsi
-EXTRA_DIST = $(top_srcdir)/nsis/tox.ico
+EXTRA_DIST = nsis/tox.ico README
 
 if HAVE_NSIS
 nsis-installer: $(BUILT_SOURCES) autoconfig.h
